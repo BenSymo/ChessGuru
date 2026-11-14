@@ -2,10 +2,15 @@
 
 from __future__ import annotations
 
+from collections import Counter
+from typing import Annotated
+
 import typer
 
-from chessguru import __version__
+from chessguru import __version__, pipeline
+from chessguru.api.client import ChessComError
 from chessguru.config import Settings
+from chessguru.quality.checks import DataContractError
 
 app = typer.Typer(
     help="See where you're going wrong at chess and what to fix first.",
@@ -45,3 +50,40 @@ def doctor() -> None:
     if stockfish is None:
         typer.echo("\nStockfish is needed for analysis. See the README for how to install it.")
         raise typer.Exit(code=1)
+
+
+@app.command()
+def fetch(
+    username: Annotated[
+        str | None, typer.Argument(help="chess.com username. Defaults to CHESSGURU_USERNAME.")
+    ] = None,
+    games: Annotated[
+        int | None, typer.Option("--games", "-n", min=1, help="How many recent games to get.")
+    ] = None,
+) -> None:
+    """Download your recent games from chess.com and check them."""
+    settings = Settings()
+    name = (username or settings.username or "").strip().lower()
+    if not name:
+        typer.echo("Give a username, e.g. `chessguru fetch myname`, or set CHESSGURU_USERNAME.")
+        raise typer.Exit(code=2)
+
+    try:
+        summary = pipeline.fetch(settings, name, max_games=games)
+        report = pipeline.check(settings, name)
+    except (ChessComError, DataContractError) as exc:
+        typer.echo(f"Error: {exc}")
+        raise typer.Exit(code=1) from exc
+
+    months = ", ".join(m.key for m in summary.months) or "none"
+    typer.echo(f"Months: {months}")
+    typer.echo(f"  downloaded {len(summary.downloaded)}, reused {len(summary.cached)} from disk")
+    limit = games or settings.max_games
+    typer.echo(f"Games ready: {len(report.valid)} (the newest {limit} will be analysed)")
+    if report.rejected:
+        typer.echo(f"Games set aside: {len(report.rejected)}")
+        reasons = Counter(r.reason for r in report.rejected)
+        for reason, count in reasons.most_common():
+            typer.echo(f"  {count} x {reason}")
+    for warning in report.warnings:
+        typer.echo(f"Warning: {warning}")
