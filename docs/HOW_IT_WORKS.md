@@ -22,7 +22,7 @@ SILVER  silver_games, silver_moves             (DuckDB: data/chessguru.duckdb)
 SILVER  silver_move_evals, silver_game_analysis
     │  build      transform/ + dbt/   staging → intermediate → star schema, with tests
     ▼
-GOLD    fact_game, fact_move, dim_* (+ mart_*)
+GOLD    fact_game, fact_move, dim_*
     │             app/data.py   read-only queries
     ▼
 DASHBOARD (Streamlit)  app/          filters, charts, tips (insights/tips.py)
@@ -162,8 +162,7 @@ older silver tables are dropped and rebuilt from bronze, which is always kept.
 |---|---|---|
 | staging (views) | `stg_games`, `stg_moves`, `stg_move_evals`, `stg_game_analysis` | Clean names and types. Adds `score` (1 / ½ / 0). The raw opponent name is dropped here |
 | intermediate (views) | `int_player_move_evals`, `int_game_eval_stats`, `int_rating_changes` | Player's own moves plus `low_clock`. Per-game bad-move counts and peak win chance. Rating change points |
-| gold, core (tables) | `fact_game`, `fact_move`, `dim_date`, `dim_time_control`, `dim_opening`, `dim_opponent`, `dim_player` | Star schema. See below |
-| gold, analysis (tables) | `mart_opening_performance`, `mart_rating_trend`, `mart_time_management`, `mart_game_endings`, `mart_phase_accuracy`, `mart_mistake_patterns` | Ready-made summaries for querying the database directly. The dashboard doesn't use them: it summarises `fact_*` itself, so its filters apply |
+| gold (tables) | `fact_game`, `fact_move`, `dim_date`, `dim_time_control`, `dim_opening`, `dim_opponent`, `dim_player` | Star schema. See below |
 
 **The star schema:**
 - **`fact_game`:** one row per game.
@@ -183,7 +182,7 @@ older silver tables are dropped and rebuilt from bronze, which is always kept.
   - every silver game reaches `fact_game`
   - each player has one current `dim_player` row per time class
   - no raw opponent username appears in gold
-  - percentages and win chances stay in range
+  - scores and win chances stay in range
   - every evaluation belongs to a move
 
 **Schema names:** a custom `generate_schema_name` macro makes the schema names exactly `staging`,

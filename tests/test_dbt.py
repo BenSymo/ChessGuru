@@ -33,9 +33,11 @@ def built(tmp_path_factory: pytest.TempPathFactory) -> Settings:
     return settings
 
 
-def query(settings: Settings, sql: str) -> list[tuple[object, ...]]:
+def query(
+    settings: Settings, sql: str, params: list[object] | None = None
+) -> list[tuple[object, ...]]:
     with duckdb.connect(str(settings.db_path), read_only=True) as conn:
-        return conn.execute(sql).fetchall()
+        return conn.execute(sql, params or []).fetchall()
 
 
 def test_fact_game(built: Settings) -> None:
@@ -105,11 +107,12 @@ def test_time_control_labels(built: Settings) -> None:
     assert rows == [("180+2", "3 min + 2s"), ("600", "10 min")]
 
 
-def test_opening_mart(built: Settings) -> None:
+def test_results_by_opening(built: Settings) -> None:
     rows = query(
         built,
-        "select opening_family, player_colour, games, points, score_pct "
-        "from gold.mart_opening_performance order by opening_family, player_colour",
+        "select o.opening_family, f.player_colour, count(*), sum(f.score), avg(f.score) "
+        "from gold.fact_game f join gold.dim_opening o using (opening_key) "
+        "group by all order by 1, 2",
     )
 
     assert rows == [
@@ -185,22 +188,25 @@ def test_analysis_reaches_gold(built: Settings) -> None:
     assert isinstance(rows[2][2], int) and rows[2][2] >= 1
 
 
-def test_mistake_patterns(built: Settings) -> None:
-    rows = query(
-        built,
-        "select tag, phase, moves from gold.mart_mistake_patterns where tag = 'allowed_mate'",
-    )
+BAD_MOVE_TAGS = (
+    "select tag, phase, count(*) from ("
+    "  select unnest(tags) as tag, phase from gold.fact_move"
+    "  where is_player_move and is_bad_move"
+    ") where tag = ? group by all"
+)
 
-    assert rows == [("allowed_mate", "opening", 1)]
-    low_clock = query(built, "select moves from gold.mart_mistake_patterns where tag = 'low_clock'")
-    assert low_clock == [(1,)]
+
+def test_bad_move_reasons(built: Settings) -> None:
+    assert query(built, BAD_MOVE_TAGS, ["allowed_mate"]) == [("allowed_mate", "opening", 1)]
+    # low_clock is added by dbt, not by the analysis step.
+    assert query(built, BAD_MOVE_TAGS, ["low_clock"]) == [("low_clock", "opening", 1)]
 
 
 def test_phase_accuracy(built: Settings) -> None:
     rows = query(
         built,
-        "select phase, sum(games), sum(moves), sum(blunders) "
-        "from gold.mart_phase_accuracy group by 1",
+        "select phase, count(distinct game_key), count(*), count(*) filter (label = 'blunder') "
+        "from gold.fact_move where is_player_move and is_analysed group by 1",
     )
 
     # 4 analysed games, all short enough to stay in the opening; 15 of the moves are ours.
