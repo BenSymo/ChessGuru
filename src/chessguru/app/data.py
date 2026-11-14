@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 
 import duckdb
@@ -20,7 +20,6 @@ class Filters:
     last_n: int | None = None  # newest N games after the other filters
     colour: str | None = None  # "white", "black" or None for both
     rated_only: bool = False
-    extra: dict[str, str] = field(default_factory=dict, compare=False, hash=False)
 
 
 GAMES_SQL = """
@@ -98,7 +97,7 @@ def load_moves(db_path: Path, username: str, game_keys: list[str]) -> pd.DataFra
     """The player's own analysed moves in these games."""
     if not game_keys:
         return pd.DataFrame(columns=_MOVE_COLUMNS)
-    return _query(db_path, MOVES_SQL, [username, game_keys])
+    return _none_for_missing(_query(db_path, MOVES_SQL, [username, game_keys]))
 
 
 _MOVE_COLUMNS = [
@@ -121,7 +120,16 @@ order by m.ply
 
 def load_game_moves(db_path: Path, username: str, game_key: str) -> pd.DataFrame:
     """Every move of one game, both sides, with engine verdicts where analysed."""
-    return _query(db_path, GAME_MOVES_SQL, [username, game_key])
+    return _none_for_missing(_query(db_path, GAME_MOVES_SQL, [username, game_key]))
+
+
+def _none_for_missing(moves: pd.DataFrame) -> pd.DataFrame:
+    """Missing moves come back from DuckDB as NaN, which counts as true in `if` checks
+    and prints as "nan". Use None instead, so "no better move" reads as no move."""
+    for column in ("best_move_san", "best_move_uci"):
+        if column in moves:
+            moves[column] = moves[column].astype(object).where(moves[column].notna(), None)
+    return moves
 
 
 def health(db_path: Path) -> dict[str, pd.DataFrame]:

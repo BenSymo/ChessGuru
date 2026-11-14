@@ -1,3 +1,5 @@
+"""Mistakes page: accuracy per phase, why bad moves went wrong, and the costliest moves."""
+
 from __future__ import annotations
 
 import streamlit as st

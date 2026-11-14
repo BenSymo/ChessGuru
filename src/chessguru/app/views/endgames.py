@@ -1,3 +1,5 @@
+"""Endgames page: converting winning positions, endgame accuracy, and how games finish."""
+
 from __future__ import annotations
 
 import streamlit as st

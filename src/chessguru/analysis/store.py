@@ -158,7 +158,8 @@ def analyse_games(
             finally:
                 pool_of_engines.put(engine)
 
-        with ThreadPoolExecutor(max_workers=count) as pool:
+        pool = ThreadPoolExecutor(max_workers=count)
+        try:
             futures = [pool.submit(work, uuid) for uuid in todo]
             for future in as_completed(futures):
                 uuid, analysis = future.result()
@@ -166,6 +167,9 @@ def analyse_games(
                 summary.analysed += 1
                 if progress:
                     progress(summary.analysed, len(todo))
+        finally:
+            # If a game fails, don't wait for the rest of the queue before reporting it.
+            pool.shutdown(wait=True, cancel_futures=True)
     finally:
         for engine in engines:
             engine.close()

@@ -1,3 +1,5 @@
+"""Settings and finding Stockfish."""
+
 from pathlib import Path
 
 import pytest

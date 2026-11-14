@@ -1,3 +1,5 @@
+"""Turning chess.com games into silver game and move rows."""
+
 from datetime import UTC, datetime
 
 import pytest

@@ -1,3 +1,5 @@
+"""Data health page: pipeline run log, games set aside (quarantine) and row counts."""
+
 from __future__ import annotations
 
 import streamlit as st

@@ -39,7 +39,7 @@ DARK = Theme(
     surface="#1a1a19",
 )
 
-GOOD, NEUTRAL, CRITICAL, WARNING = "#0ca30c", "#898781", "#d03b3b", "#fab219"
+GOOD, NEUTRAL, CRITICAL = "#0ca30c", "#898781", "#d03b3b"
 RESULT_COLOURS = {"win": GOOD, "draw": NEUTRAL, "loss": CRITICAL}
 TIME_CLASSES = ("bullet", "blitz", "rapid", "daily")
 FONT = 'system-ui, -apple-system, "Segoe UI", sans-serif'

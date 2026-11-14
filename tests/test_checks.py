@@ -1,3 +1,5 @@
+"""Data quality checks: contract, duplicates, variants, freshness and the stop rule."""
+
 import json
 from datetime import UTC, datetime
 

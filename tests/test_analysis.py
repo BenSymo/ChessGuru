@@ -1,3 +1,5 @@
+"""Move scoring, labels, phases and tactic tags, using a fake engine."""
+
 import math
 
 import chess

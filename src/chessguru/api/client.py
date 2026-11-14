@@ -13,7 +13,7 @@ import re
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import date
+from datetime import UTC, datetime
 from types import TracebackType
 from typing import Self
 
@@ -43,9 +43,10 @@ class ArchiveMonth:
     def key(self) -> str:
         return f"{self.year:04d}-{self.month:02d}"
 
-    def is_current(self, today: date) -> bool:
-        """The current month is still changing; past months never do."""
-        return (self.year, self.month) == (today.year, today.month)
+    def ends_at(self) -> datetime:
+        """The moment this month is over (midnight UTC on the 1st of the next month)."""
+        year, month = (self.year + 1, 1) if self.month == 12 else (self.year, self.month + 1)
+        return datetime(year, month, 1, tzinfo=UTC)
 
     @classmethod
     def from_url(cls, url: str) -> ArchiveMonth:

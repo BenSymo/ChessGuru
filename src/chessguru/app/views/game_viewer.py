@@ -1,3 +1,5 @@
+"""Game viewer page: step through one game with Stockfish's verdict on every move."""
+
 from __future__ import annotations
 
 import pandas as pd

@@ -1,3 +1,5 @@
+"""Shared fixtures: a clean environment for every test, and a sample gold database."""
+
 from __future__ import annotations
 
 from typing import TYPE_CHECKING

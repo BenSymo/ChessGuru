@@ -1,3 +1,5 @@
+"""The analyse step: picking games, running engines in parallel, saving results."""
+
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -126,3 +128,23 @@ def test_only_analyses_the_chosen_games(settings: Settings) -> None:
     conn = connect(settings.db_path)
     done = conn.execute("select game_uuid from silver_game_analysis order by 1").fetchall()
     assert done == [("uuid-1",), ("uuid-3",)]
+
+
+class BrokenEvaluator(FakeEvaluator):
+    """Fails on its first position, like a crashed engine."""
+
+    def evaluate(self, board):  # type: ignore[no-untyped-def]
+        self.calls += 1
+        raise EngineError("Stockfish failed")
+
+
+def test_a_failing_game_stops_the_rest(settings: Settings) -> None:
+    engine = BrokenEvaluator()
+
+    with pytest.raises(EngineError):
+        pipeline.analyse(
+            settings, "testplayer", max_games=5, make_evaluator=lambda: engine, workers=1
+        )
+
+    assert engine.calls <= 2  # the queued games were cancelled, not run
+    assert engine.closed

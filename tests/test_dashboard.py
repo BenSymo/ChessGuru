@@ -70,6 +70,12 @@ def test_no_moves_for_no_games(gold_settings: Settings) -> None:
     assert data.load_moves(gold_settings.db_path, "testplayer", []).empty
 
 
+def test_missing_moves_are_none_not_nan() -> None:
+    moves = pd.DataFrame({"san": ["e4", "d4"], "best_move_san": ["e4", float("nan")]})
+    cleaned = data._none_for_missing(moves)
+    assert list(cleaned["best_move_san"]) == ["e4", None]
+
+
 def test_missing_database(tmp_path: Path) -> None:
     with pytest.raises(data.DataUnavailable, match="No database"):
         data.load_games(tmp_path / "nope.duckdb", data.Filters("x"))

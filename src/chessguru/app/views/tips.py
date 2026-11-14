@@ -1,3 +1,5 @@
+"""Tips page: every tip, ranked by cost, with example positions from your games."""
+
 from __future__ import annotations
 
 import streamlit as st

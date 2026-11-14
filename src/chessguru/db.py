@@ -19,16 +19,17 @@ from chessguru.quality.checks import Rejected
 SCHEMA_VERSION = 2
 
 SCHEMA = """
+-- Games set aside by the checks (step 'check') or the parser (step 'parse').
 CREATE TABLE IF NOT EXISTS quarantine (
     username        VARCHAR NOT NULL,
     source_file     VARCHAR NOT NULL,
     game_url        VARCHAR,
     reason          VARCHAR NOT NULL,
-    quarantined_at  TIMESTAMPTZ NOT NULL
+    quarantined_at  TIMESTAMPTZ NOT NULL,
+    step            VARCHAR NOT NULL DEFAULT 'check'
 );
--- Added in milestone 3: which pipeline step set the game aside.
-ALTER TABLE quarantine ADD COLUMN IF NOT EXISTS step VARCHAR DEFAULT 'check';
 
+-- One row per pipeline step run, with what it did (details) or why it failed.
 CREATE TABLE IF NOT EXISTS pipeline_runs (
     run_id       VARCHAR NOT NULL,
     step         VARCHAR NOT NULL,
@@ -126,6 +127,7 @@ CREATE TABLE IF NOT EXISTS silver_game_analysis (
 
 
 def connect(path: Path) -> duckdb.DuckDBPyConnection:
+    """Open (or create) the database, making sure every table exists."""
     path.parent.mkdir(parents=True, exist_ok=True)
     conn = duckdb.connect(str(path))
     _migrate(conn)
@@ -134,6 +136,7 @@ def connect(path: Path) -> duckdb.DuckDBPyConnection:
 
 
 def _migrate(conn: duckdb.DuckDBPyConnection) -> None:
+    """Drop the silver tables if they were made by an older SCHEMA_VERSION."""
     conn.execute("CREATE TABLE IF NOT EXISTS schema_version (version INTEGER NOT NULL)")
     row = conn.execute("SELECT max(version) FROM schema_version").fetchone()
     current = row[0] if row and row[0] is not None else None

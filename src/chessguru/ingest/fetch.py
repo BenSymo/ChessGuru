@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass, field
-from datetime import date
 
 from chessguru.api.client import ArchiveMonth, ChessComClient
 from chessguru.ingest.bronze import BronzeStore
@@ -36,16 +35,15 @@ def fetch_recent_games(
     store: BronzeStore,
     username: str,
     max_games: int,
-    today: date,
 ) -> FetchSummary:
     """Fetch months, newest first, until we have at least `max_games` games.
 
-    Past months already on disk are reused, so later runs only download
-    the current month and anything new.
+    Months already stored in full are reused, so later runs only download the
+    current month and anything new (see BronzeStore.is_complete).
     """
     summary = FetchSummary(username=username.lower())
     for month in reversed(client.get_archives(username)):
-        if store.has(username, month) and not month.is_current(today):
+        if store.is_complete(username, month):
             raw = store.read(username, month)
             summary.cached.append(month)
         else:

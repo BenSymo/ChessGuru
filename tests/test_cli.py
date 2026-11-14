@@ -1,3 +1,5 @@
+"""The command-line tool."""
+
 import shutil
 from pathlib import Path
 

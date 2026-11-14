@@ -15,7 +15,6 @@ import hashlib
 import hmac
 import secrets
 from collections.abc import Callable
-from pathlib import Path
 
 from chessguru.config import Settings
 
@@ -30,7 +29,7 @@ def load_key(settings: Settings) -> bytes:
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(secrets.token_hex(32))
         path.chmod(0o600)
-    return Path(path).read_text().strip().encode()
+    return path.read_text().strip().encode()
 
 
 def make_hasher(key: bytes) -> Callable[[str], str]:

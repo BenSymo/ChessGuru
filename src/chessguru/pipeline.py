@@ -26,10 +26,8 @@ def fetch(
     username: str,
     max_games: int | None = None,
     client: ChessComClient | None = None,
-    now: datetime | None = None,
 ) -> FetchSummary:
     """Download recent games for `username` into the bronze layer."""
-    now = now or datetime.now(UTC)
     limit = max_games or settings.max_games
     store = BronzeStore(settings.bronze_dir)
     owns_client = client is None
@@ -37,7 +35,7 @@ def fetch(
     conn = connect(settings.db_path)
     try:
         with logged_run(conn, "fetch", username) as details:
-            summary = fetch_recent_games(client, store, username, limit, now.date())
+            summary = fetch_recent_games(client, store, username, limit)
             details.update(
                 downloaded=[m.key for m in summary.downloaded],
                 cached=[m.key for m in summary.cached],

@@ -1,3 +1,5 @@
+"""The chess.com API client: politeness, retries and errors (with a fake API)."""
+
 import httpx
 import pytest
 import respx

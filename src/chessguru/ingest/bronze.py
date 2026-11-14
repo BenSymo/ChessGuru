@@ -2,14 +2,16 @@
 
 Layout: <data_dir>/bronze/<username>/<YYYY-MM>.json
 
-Past months are never edited. The current month is still changing, so it is
-replaced with the latest copy each time it is fetched.
+A month's file is "complete" once it was downloaded after that month ended. Complete
+files never change, so they are reused. Any other file (the current month, or a past
+month first downloaded while it was still going) is downloaded again.
 """
 
 from __future__ import annotations
 
 import os
 import tempfile
+from datetime import UTC, datetime
 from pathlib import Path
 
 from chessguru.api.client import ArchiveMonth
@@ -22,8 +24,13 @@ class BronzeStore:
     def path_for(self, username: str, month: ArchiveMonth) -> Path:
         return self.root / username.lower() / f"{month.key}.json"
 
-    def has(self, username: str, month: ArchiveMonth) -> bool:
-        return self.path_for(username, month).exists()
+    def is_complete(self, username: str, month: ArchiveMonth) -> bool:
+        """True if the stored file was downloaded after the month ended."""
+        path = self.path_for(username, month)
+        if not path.exists():
+            return False
+        written = datetime.fromtimestamp(path.stat().st_mtime, UTC)
+        return written >= month.ends_at()
 
     def read(self, username: str, month: ArchiveMonth) -> bytes:
         return self.path_for(username, month).read_bytes()

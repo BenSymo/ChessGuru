@@ -1,3 +1,5 @@
+"""Overview page (the home page): top 3 things to fix, then headline numbers and charts."""
+
 from __future__ import annotations
 
 import streamlit as st

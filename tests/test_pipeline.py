@@ -1,3 +1,5 @@
+"""The pipeline steps end to end: fetch, check and parse."""
+
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -33,7 +35,7 @@ def test_fetch_then_check_fills_quarantine_and_run_log(settings: Settings) -> No
     mock_api()
     client = ChessComClient("t", delay=0, sleep=lambda _: None)
 
-    summary = pipeline.fetch(settings, "testplayer", client=client, now=NOW)
+    summary = pipeline.fetch(settings, "testplayer", client=client)
     pipeline.check(settings, "testplayer", now=NOW)
     report = pipeline.check(settings, "testplayer", now=NOW)  # re-run is safe
 
@@ -94,7 +96,7 @@ def test_cli_fetch_needs_a_username() -> None:
 def test_parse_writes_silver_and_skips_stored_games(settings: Settings) -> None:
     mock_api()
     client = ChessComClient("t", delay=0, sleep=lambda _: None)
-    pipeline.fetch(settings, "testplayer", client=client, now=NOW)
+    pipeline.fetch(settings, "testplayer", client=client)
     report = pipeline.check(settings, "testplayer", now=NOW)
     broken = report.valid[0].model_copy(update={"uuid": "broken", "pgn": "1. e4 e5 2. Ke3 *"})
 

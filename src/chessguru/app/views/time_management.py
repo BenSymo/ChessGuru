@@ -1,5 +1,8 @@
+"""Time page: time spent per move, bad moves by clock left, and losses on time."""
+
 from __future__ import annotations
 
+import pandas as pd
 import streamlit as st
 
 from chessguru.app import aggregates, charts
@@ -44,7 +47,7 @@ def render() -> None:
         st.plotly_chart(
             charts.columns(
                 list(risk["clock_left"]),
-                [None if r is None else r * 100 for r in risk["bad_rate"]],
+                [None if pd.isna(r) else r * 100 for r in risk["bad_rate"]],
                 theme,
                 y_title="% of moves that were mistakes or blunders",
                 value_format=".1f",

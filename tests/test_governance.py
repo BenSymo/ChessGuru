@@ -1,3 +1,5 @@
+"""Opponent username hashing and keeping raw names out of gold."""
+
 from pathlib import Path
 
 import pytest
