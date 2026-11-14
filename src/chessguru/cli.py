@@ -130,6 +130,40 @@ def _analyse(settings: Settings, name: str, games: int | None) -> None:
 
 
 @app.command()
+def tips(username: UsernameArg = None, games: GamesOpt = None) -> None:
+    """Show what to fix first, from your newest games (run `chessguru run` first)."""
+    from chessguru.app import data
+    from chessguru.insights.tips import build_tips
+
+    settings = Settings()
+    name = _username(settings, username)
+    limit = games or settings.max_games
+    try:
+        recent = data.load_games(settings.db_path, data.Filters(name, last_n=limit))
+        keys = list(recent.loc[recent["is_analysed"], "game_key"])
+        moves = data.load_moves(settings.db_path, name, keys)
+    except data.DataUnavailable as exc:
+        typer.echo(f"Error: {exc}")
+        raise typer.Exit(code=1) from exc
+    if recent.empty:
+        typer.echo(f"No games for {name} yet. Run `chessguru run {name}` first.")
+        raise typer.Exit(code=1)
+
+    found = build_tips(recent, moves)
+    fixes = [t for t in found if t.kind == "fix"]
+    typer.echo(f"From your newest {len(recent)} games ({len(keys)} analysed):\n")
+    if not fixes:
+        typer.echo("No clear weaknesses. Include more games with --games for a fuller picture.")
+    for rank, tip in enumerate(fixes, start=1):
+        strength = "clear pattern" if tip.firm else "early sign"
+        typer.echo(f"{rank}. {tip.title}  ({tip.cost:.1f} games' worth of points, {strength})")
+        typer.echo(f"   {tip.detail}")
+        typer.echo(f"   What to do: {tip.advice}\n")
+    for tip in (t for t in found if t.kind == "strength"):
+        typer.echo(f"+ {tip.title}. {tip.detail}")
+
+
+@app.command()
 def dashboard(
     port: Annotated[int, typer.Option(help="Port to serve the dashboard on.")] = 8501,
 ) -> None:

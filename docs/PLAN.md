@@ -39,8 +39,10 @@ Airflow runs the steps daily in full-stack mode. Lite mode runs the same steps f
 
 ## Tips
 
-Each tip rule reads a gold table and checks it against a limit. Tips are ranked by how many games
-they cost you, show how many games they are based on, and include up to 3 example positions.
+Each tip rule checks a pattern in the filtered games and analysed moves (src/chessguru/insights).
+Tips are ranked by cost (games' worth of points lost), show how many games they are based on
+(clear pattern vs early sign), and include up to 3 example positions, preferring ones not already
+shown by a higher tip. The weak-phase tip counts only the cost beyond your usual rate elsewhere.
 
 ## Dashboard pages
 

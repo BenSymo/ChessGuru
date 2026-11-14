@@ -217,3 +217,41 @@ def time_per_move(profile: pd.DataFrame, theme: Theme) -> go.Figure:
     fig.update_yaxes(title_text="Seconds per move", rangemode="tozero")
     fig.update_layout(hovermode="x unified")
     return fig
+
+
+def eval_chart(
+    plies: list[int],
+    white_win: list[float],
+    bad_plies: list[int],
+    selected: int | None,
+    theme: Theme,
+) -> go.Figure:
+    """White's chance of winning after each move. Your mistakes are marked."""
+    fig = go.Figure()
+    fig.add_scatter(
+        x=plies,
+        y=white_win,
+        mode="lines",
+        line={"color": theme.series[0], "width": 2},
+        fill="tozeroy",
+        fillcolor="rgba(42,120,214,0.10)",
+        hovertemplate="Ply %{x}: White %{y:.0f}%<extra></extra>",
+        showlegend=False,
+    )
+    marks = [(p, w) for p, w in zip(plies, white_win, strict=True) if p in set(bad_plies)]
+    if marks:
+        fig.add_scatter(
+            x=[p for p, _ in marks],
+            y=[w for _, w in marks],
+            mode="markers",
+            name="Your mistakes and blunders",
+            marker={"size": 10, "color": CRITICAL, "line": {"color": theme.surface, "width": 2}},
+            hovertemplate="Your mistake at ply %{x}<extra></extra>",
+        )
+    if selected is not None:
+        fig.add_vline(x=selected, line={"color": theme.text_muted, "width": 1})
+    fig.add_hline(y=50, line={"color": theme.baseline, "width": 1})
+    fig = _style(fig, theme, height=240, legend=bool(marks))
+    fig.update_yaxes(range=[0, 100], title_text="White's win chance (%)")
+    fig.update_xaxes(title_text="Ply (half-move)", showgrid=False)
+    return fig

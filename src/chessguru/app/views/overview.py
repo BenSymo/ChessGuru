@@ -3,6 +3,7 @@ from __future__ import annotations
 import streamlit as st
 
 from chessguru.app import aggregates, charts
+from chessguru.app.components import cost_text, tip_badge, tips_for
 from chessguru.app.context import get_context, num, pct
 
 
@@ -16,6 +17,23 @@ def render() -> None:
         f"Your newest {s.games} games · {s.analysed} analysed with Stockfish · "
         f"{games['date_day'].min():%d %b %Y} to {games['date_day'].max():%d %b %Y}"
     )
+
+    st.subheader("Fix these first")
+    fixes = [t for t in tips_for(ctx) if t.kind == "fix"][:3]
+    if not fixes:
+        st.success("No clear weaknesses in these games. Include more games for a fuller picture.")
+    for column, (rank, tip) in zip(st.columns(3), enumerate(fixes, start=1), strict=False):
+        with column, st.container(border=True, height="stretch"):
+            st.markdown(f"**{rank}. {tip.title}**")
+            tip_badge(tip)
+            st.caption(f"{cost_text(tip)} · based on {tip.based_on} games")
+            st.write(tip.advice)
+    if fixes and "pages" in st.session_state:
+        st.page_link(
+            st.session_state["pages"]["tips"],
+            label="See every tip, with examples",
+            icon=":material/arrow_forward:",
+        )
 
     a, b, c, d = st.columns(4)
     a.metric("Score", pct(s.score_pct), help="Wins count 1, draws ½, losses 0.")

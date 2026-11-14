@@ -108,6 +108,22 @@ _MOVE_COLUMNS = [
 ]  # fmt: skip
 
 
+GAME_MOVES_SQL = """
+select
+    m.ply, m.move_number, m.colour, m.is_player_move, m.san, m.uci, m.fen_before,
+    m.clock_seconds, m.time_spent_seconds, m.is_analysed, m.phase, m.label, m.is_bad_move,
+    m.win_before, m.win_after, m.win_drop, m.best_move_san, m.best_move_uci, m.tags
+from gold.fact_move m
+where m.username = ? and m.game_key = ?
+order by m.ply
+"""
+
+
+def load_game_moves(db_path: Path, username: str, game_key: str) -> pd.DataFrame:
+    """Every move of one game, both sides, with engine verdicts where analysed."""
+    return _query(db_path, GAME_MOVES_SQL, [username, game_key])
+
+
 def health(db_path: Path) -> dict[str, pd.DataFrame]:
     """Pipeline runs, quarantine and row counts for the Data Health page."""
     queries = {

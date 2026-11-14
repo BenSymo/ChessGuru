@@ -12,7 +12,16 @@ from chessguru.app import aggregates, data
 from chessguru.config import Settings
 
 MAIN = Path(__file__).parents[1] / "src" / "chessguru" / "app" / "main.py"
-PAGES = ["overview", "openings", "mistakes", "time_management", "endgames", "health"]
+PAGES = [
+    "overview",
+    "tips",
+    "openings",
+    "mistakes",
+    "time_management",
+    "endgames",
+    "game_viewer",
+    "health",
+]
 
 
 @pytest.fixture

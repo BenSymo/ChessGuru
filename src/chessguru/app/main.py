@@ -10,7 +10,16 @@ import streamlit as st
 from chessguru import pipeline
 from chessguru.app import data
 from chessguru.app.context import Context, current_theme, set_context
-from chessguru.app.views import endgames, health, mistakes, openings, overview, time_management
+from chessguru.app.views import (
+    endgames,
+    game_viewer,
+    health,
+    mistakes,
+    openings,
+    overview,
+    time_management,
+    tips,
+)
 from chessguru.config import Settings
 
 st.set_page_config(page_title="ChessGuru", page_icon="♟", layout="wide")
@@ -160,31 +169,32 @@ def main() -> None:
     set_context(ctx)
     update_controls(settings, ctx)
 
-    page = st.navigation(
-        [
-            st.Page(
-                overview.render,
-                title="Overview",
-                icon=":material/dashboard:",
-                url_path="overview",
-                default=True,
-            ),
-            st.Page(
-                openings.render, title="Openings", icon=":material/menu_book:", url_path="openings"
-            ),
-            st.Page(
-                mistakes.render, title="Mistakes", icon=":material/error:", url_path="mistakes"
-            ),
-            st.Page(time_management.render, title="Time", icon=":material/timer:", url_path="time"),
-            st.Page(endgames.render, title="Endgames", icon=":material/flag:", url_path="endgames"),
-            st.Page(
-                health.render,
-                title="Data health",
-                icon=":material/monitor_heart:",
-                url_path="health",
-            ),
-        ]
-    )
+    pages = {
+        "overview": st.Page(
+            overview.render, title="Overview", icon=":material/dashboard:", default=True
+        ),
+        "tips": st.Page(tips.render, title="Tips", icon=":material/lightbulb:", url_path="tips"),
+        "openings": st.Page(
+            openings.render, title="Openings", icon=":material/menu_book:", url_path="openings"
+        ),
+        "mistakes": st.Page(
+            mistakes.render, title="Mistakes", icon=":material/error:", url_path="mistakes"
+        ),
+        "time": st.Page(
+            time_management.render, title="Time", icon=":material/timer:", url_path="time"
+        ),
+        "endgames": st.Page(
+            endgames.render, title="Endgames", icon=":material/flag:", url_path="endgames"
+        ),
+        "viewer": st.Page(
+            game_viewer.render, title="Game viewer", icon=":material/chess:", url_path="game"
+        ),
+        "health": st.Page(
+            health.render, title="Data health", icon=":material/monitor_heart:", url_path="health"
+        ),
+    }
+    st.session_state["pages"] = pages
+    page = st.navigation(list(pages.values()))
     if games.empty:
         st.info("No games match these filters.")
         return

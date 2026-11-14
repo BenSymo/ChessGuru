@@ -5,7 +5,7 @@ Quickly see where you're going wrong at chess and what to fix first to reach the
 ChessGuru downloads your games from chess.com, scores every move with Stockfish, and ranks your
 biggest weaknesses by how many games they cost you. Everything runs on your own machine.
 
-> **Status:** early development. Milestones 1–6 are done: downloading and checking games, Stockfish analysis, the gold tables and the dashboard. See [the plan](docs/PLAN.md).
+> **Status:** early development. Milestones 1–7 are done: downloading and checking games, Stockfish analysis, the gold tables, the dashboard, and ranked tips. See [the plan](docs/PLAN.md).
 
 ## What you need
 
@@ -57,11 +57,13 @@ and how many games to analyse, then press **Get my games**. After that:
 
 | Page | What it shows |
 |---|---|
-| Overview | Score, accuracy, blunders per game, where and why your bad moves happen, rating |
+| Overview | Your top 3 things to fix, then score, accuracy, where and why your bad moves happen, rating |
+| Tips | Every tip, ranked by what it cost you, with example positions from your games |
 | Openings | Results per opening family as White and Black |
 | Mistakes | Accuracy per phase, reasons for bad moves, your costliest moves with links |
 | Time | Time per move, bad moves by clock left, losses on time |
 | Endgames | Converting winning positions, endgame accuracy, how games finish |
+| Game viewer | Step through any game on a board, with Stockfish's verdict and a win-chance chart |
 | Data health | Pipeline runs, games set aside, row counts |
 
 Everything can also be run from the command line, below.
@@ -91,6 +93,23 @@ time left). Each game is split into opening, middlegame and endgame.
 Results are saved, so changing the number of games only analyses the extra ones.
 Expect roughly 2–3 seconds per game on a 4-core laptop at depth 14. To change the
 default, set `CHESSGURU_MAX_GAMES` and `CHESSGURU_ENGINE_DEPTH` in `.env`.
+
+## Tips
+
+```bash
+uv run chessguru tips <you>              # what to fix first, in the terminal
+uv run chessguru tips <you> --games 100
+```
+
+Each tip rule checks one pattern: hanging pieces, missed tactics, missed or allowed mates,
+not punishing mistakes, blunders when short of time, a weak game phase, letting winning
+positions slip, openings that aren't working, losing on time, results after a loss, and a
+gap between White and Black.
+
+Tips are ranked by **cost**: roughly how many games' worth of points the problem cost you.
+For bad moves, that is the drop in your chance of winning, added up per game and capped at
+one game each. Each tip also says how many games it is based on, and whether it is a
+**clear pattern** (3+ games out of 15+) or an **early sign**. Strengths are listed too.
 
 ## Build the gold tables
 
