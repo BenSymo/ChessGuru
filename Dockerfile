@@ -26,5 +26,9 @@ RUN useradd --create-home chessguru && mkdir -p /app/data && chown chessguru /ap
 USER chessguru
 VOLUME ["/app/data"]
 
+# The dashboard: docker run -p 8501:8501 -v "$PWD/data:/app/data" chessguru dashboard
+ENV STREAMLIT_SERVER_HEADLESS=true
+EXPOSE 8501
+
 ENTRYPOINT ["chessguru"]
 CMD ["--help"]

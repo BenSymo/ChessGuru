@@ -130,6 +130,28 @@ def _analyse(settings: Settings, name: str, games: int | None) -> None:
 
 
 @app.command()
+def dashboard(
+    port: Annotated[int, typer.Option(help="Port to serve the dashboard on.")] = 8501,
+) -> None:
+    """Open the dashboard in your browser."""
+    import subprocess
+    import sys
+    from pathlib import Path
+
+    app_file = Path(__file__).parent / "app" / "main.py"
+    command = [
+        sys.executable, "-m", "streamlit", "run", str(app_file),
+        "--server.port", str(port),
+        "--browser.gatherUsageStats", "false",
+        "--client.toolbarMode", "minimal",
+        # Set per theme, so Streamlit still follows the viewer's light or dark mode.
+        "--theme.light.primaryColor", "#2a78d6",
+        "--theme.dark.primaryColor", "#3987e5",
+    ]  # fmt: skip
+    raise typer.Exit(subprocess.call(command))
+
+
+@app.command()
 def docs() -> None:
     """Generate the dbt docs site (models, tests and lineage)."""
     settings = Settings()

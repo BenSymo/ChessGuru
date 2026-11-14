@@ -5,7 +5,7 @@ Quickly see where you're going wrong at chess and what to fix first to reach the
 ChessGuru downloads your games from chess.com, scores every move with Stockfish, and ranks your
 biggest weaknesses by how many games they cost you. Everything runs on your own machine.
 
-> **Status:** early development. Milestones 1–5 are done: downloading and checking games, splitting them into moves, Stockfish analysis, and the gold tables. See [the plan](docs/PLAN.md).
+> **Status:** early development. Milestones 1–6 are done: downloading and checking games, Stockfish analysis, the gold tables and the dashboard. See [the plan](docs/PLAN.md).
 
 ## What you need
 
@@ -40,6 +40,31 @@ then split into one row per move, with clock times and time spent (the silver la
 kept on disk, so later runs only download what's new.
 
 Use `--games 100` to look at more games than the default 30.
+
+## Quick start
+
+```bash
+uv run chessguru dashboard
+```
+
+This opens the dashboard in your browser. The first time, enter your chess.com username
+and how many games to analyse, then press **Get my games**. After that:
+
+- **Games to include** (sidebar) sets how many of your newest games the pages cover.
+  If some aren't analysed yet, press **Analyse these games**.
+- **Get new games from chess.com** downloads and analyses anything new.
+- Filter by time control, colour, and rated games.
+
+| Page | What it shows |
+|---|---|
+| Overview | Score, accuracy, blunders per game, where and why your bad moves happen, rating |
+| Openings | Results per opening family as White and Black |
+| Mistakes | Accuracy per phase, reasons for bad moves, your costliest moves with links |
+| Time | Time per move, bad moves by clock left, losses on time |
+| Endgames | Converting winning positions, endgame accuracy, how games finish |
+| Data health | Pipeline runs, games set aside, row counts |
+
+Everything can also be run from the command line, below.
 
 ## Analyse your games
 
@@ -114,7 +139,8 @@ The image includes Stockfish.
 
 ```bash
 docker build -t chessguru .
-docker run --rm --env-file .env chessguru doctor
+docker run --rm --env-file .env -v "$PWD/data:/app/data" chessguru run <you>
+docker run --rm --env-file .env -v "$PWD/data:/app/data" -p 8501:8501 chessguru dashboard
 ```
 
 ## Development

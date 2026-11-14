@@ -113,6 +113,7 @@ def parse(
 
 def build(settings: Settings, username: str = "all") -> DbtResult:
     """Build and test the gold layer with dbt."""
+    started = datetime.now(UTC)
     conn = connect(settings.db_path)  # makes sure the silver tables exist
     conn.close()
     result: DbtResult | None = None
@@ -124,7 +125,7 @@ def build(settings: Settings, username: str = "all") -> DbtResult:
     # DuckDB allows one writer at a time, so log only after dbt has finished.
     conn = connect(settings.db_path)
     try:
-        with logged_run(conn, "build", username) as details:
+        with logged_run(conn, "build", username, started=started) as details:
             if error:
                 raise error
             assert result is not None
@@ -144,8 +145,12 @@ def analyse(
     workers: int | None = None,
     progress: Progress | None = None,
     now: datetime | None = None,
+    only: list[str] | None = None,
 ) -> AnalyseSummary:
-    """Run Stockfish over the newest games. Games already analysed are skipped."""
+    """Run Stockfish over the newest games. Games already analysed are skipped.
+
+    `only` limits the choice to these game IDs (the dashboard uses this).
+    """
     now = now or datetime.now(UTC)
     name = username.lower()
     if make_evaluator is None:
@@ -171,6 +176,7 @@ def analyse(
                 now,
                 workers=workers,
                 progress=progress,
+                only=only,
             )
             details.update(
                 selected=summary.selected,

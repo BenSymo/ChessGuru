@@ -181,14 +181,18 @@ def replace_quarantine(
 
 @contextmanager
 def logged_run(
-    conn: duckdb.DuckDBPyConnection, step: str, username: str
+    conn: duckdb.DuckDBPyConnection,
+    step: str,
+    username: str,
+    started: datetime | None = None,
 ) -> Iterator[dict[str, Any]]:
     """Record each pipeline step, whether it worked or failed.
 
     The caller can add to the yielded dict; it is saved as the run's details.
+    Pass `started` when the work began before the database could be opened.
     """
     details: dict[str, Any] = {}
-    started = datetime.now(UTC)
+    started = started or datetime.now(UTC)
     status = "failed"
     try:
         yield details

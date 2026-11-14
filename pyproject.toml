@@ -14,6 +14,8 @@ dependencies = [
     "pyarrow>=16",
     "dbt-core>=1.9",
     "dbt-duckdb>=1.9",
+    "streamlit>=1.40",
+    "plotly>=5.24",
 ]
 
 [project.scripts]
@@ -41,6 +43,8 @@ target-version = "py312"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP", "SIM", "RUF"]
+# User-facing text uses real dashes and ellipses.
+ignore = ["RUF001", "RUF002", "RUF003"]
 
 [tool.mypy]
 python_version = "3.12"
@@ -49,9 +53,14 @@ mypy_path = "src"
 plugins = ["pydantic.mypy"]
 
 [[tool.mypy.overrides]]
-module = ["chess.*", "pyarrow.*"]
+module = ["chess.*", "pyarrow.*", "pandas.*", "plotly.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-ra --cov=chessguru --cov-report=term-missing"
+filterwarnings = [
+    # Raised inside DuckDB's DataFrame export under pandas 3; not our code.
+    "ignore:The inplace keyword in DataFrame.drop is deprecated:DeprecationWarning",
+    "ignore:The inplace keyword in DataFrame.drop is deprecated",
+]

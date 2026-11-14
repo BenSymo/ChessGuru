@@ -12,42 +12,13 @@ import pytest
 from typer.testing import CliRunner
 
 from chessguru import pipeline
-from chessguru.api.contracts import Game
 from chessguru.cli import app
 from chessguru.config import Settings
 from chessguru.transform.dbt import DEFAULT_PROJECT_DIR, DbtError, run_dbt
-from tests.factories import SCHOLARS_MATE, make_game
+from tests.factories import sample_games
 from tests.fake_engine import FakeEvaluator
 
 NOW = datetime(2026, 11, 14, tzinfo=UTC)
-OPP_WIN = {"username": "rival", "rating": 1300, "result": "win"}
-
-
-def sample_games() -> list[Game]:
-    """A mix of colours, results, time classes, openings and rating changes."""
-    raw = [
-        make_game(1),
-        make_game(2, white={"username": "TestPlayer", "rating": 1208, "result": "win"}),
-        make_game(
-            3,
-            white=OPP_WIN,
-            black={"username": "TestPlayer", "rating": 1215, "result": "timeout"},
-            eco="https://www.chess.com/openings/Sicilian-Defense-Najdorf-Variation-6.Be3",
-            # Black is down to 30 seconds of 10 minutes (5%) when playing 3...Nf6??
-            pgn=SCHOLARS_MATE.replace("9:40", "0:30"),
-        ),
-        make_game(
-            4,
-            time_class="blitz",
-            time_control="180+2",
-            white={"username": "TestPlayer", "rating": 900, "result": "repetition"},
-            black={"username": "rival", "rating": 905, "result": "repetition"},
-            accuracies=None,
-            eco=None,
-        ),
-        make_game(5, end_time=1793000000 + 10 * 86400),
-    ]
-    return [Game.model_validate(g) for g in raw]
 
 
 @pytest.fixture(scope="module")
@@ -234,3 +205,11 @@ def test_phase_accuracy(built: Settings) -> None:
 
     # 4 analysed games, all short enough to stay in the opening; 15 of the moves are ours.
     assert rows == [("opening", 4, 15, 1)]
+
+
+def test_build_time_includes_dbt(built: Settings) -> None:
+    rows = query(
+        built, "select epoch(finished_at - started_at) from pipeline_runs where step = 'build'"
+    )
+
+    assert all(isinstance(r[0], float) and r[0] > 1 for r in rows)  # dbt takes a few seconds

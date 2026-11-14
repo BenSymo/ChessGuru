@@ -111,3 +111,18 @@ def test_cli_analyse_with_fake_engine(settings: Settings, monkeypatch: pytest.Mo
     assert result.exit_code == 0, result.stdout
     assert "newest 3 games at depth 6" in result.stdout
     assert "Analysed 3 games (0 were already done)" in result.stdout
+
+
+def test_only_analyses_the_chosen_games(settings: Settings) -> None:
+    summary = pipeline.analyse(
+        settings,
+        "testplayer",
+        max_games=10,
+        make_evaluator=FakeEvaluator,
+        only=["uuid-1", "uuid-3"],
+    )
+
+    assert (summary.selected, summary.analysed) == (2, 2)
+    conn = connect(settings.db_path)
+    done = conn.execute("select game_uuid from silver_game_analysis order by 1").fetchall()
+    assert done == [("uuid-1",), ("uuid-3",)]

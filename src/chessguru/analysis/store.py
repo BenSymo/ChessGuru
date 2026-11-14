@@ -31,22 +31,27 @@ def default_workers() -> int:
 
 
 def games_to_analyse(
-    conn: duckdb.DuckDBPyConnection, username: str, max_games: int, depth: int
+    conn: duckdb.DuckDBPyConnection,
+    username: str,
+    max_games: int,
+    depth: int,
+    only: list[str] | None = None,
 ) -> tuple[list[str], int]:
     """The newest `max_games` games, minus those already analysed at this depth or deeper.
 
-    Returns (games still to do, how many of the newest games are already done).
+    With `only`, choose from just those games (e.g. the ones shown in the dashboard).
+    Returns (games still to do, how many of the chosen games are already done).
     """
     rows = conn.execute(
         """
         select g.game_uuid, a.engine_depth >= ? as done
         from silver_games g
         left join silver_game_analysis a using (username, game_uuid)
-        where g.username = ?
+        where g.username = ? and (? is null or list_contains(?, g.game_uuid))
         order by g.end_time desc, g.game_uuid
         limit ?
         """,
-        [depth, username, max_games],
+        [depth, username, only, only, max_games],
     ).fetchall()
     todo = [uuid for uuid, done in rows if not done]
     return todo, len(rows) - len(todo)
@@ -124,13 +129,14 @@ def analyse_games(
     now: datetime,
     workers: int | None = None,
     progress: Progress | None = None,
+    only: list[str] | None = None,
 ) -> AnalyseSummary:
     """Analyse the newest games in parallel, saving each game as soon as it is done.
 
     Stopping part-way loses nothing: finished games are already saved, and the
     next run carries on with the rest.
     """
-    todo, done = games_to_analyse(conn, username, max_games, depth)
+    todo, done = games_to_analyse(conn, username, max_games, depth, only)
     summary = AnalyseSummary(selected=len(todo) + done, already_done=done)
     if not todo:
         return summary
