@@ -68,6 +68,7 @@ def test_cli_fetch(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
 
     assert result.exit_code == 0, result.stdout
     assert "Games ready: 2" in result.stdout
+    assert "2 new, 0 already stored" in result.stdout
     assert "1 x variant 'crazyhouse' is not supported" in result.stdout
 
 
@@ -87,3 +88,41 @@ def test_cli_fetch_needs_a_username() -> None:
 
     assert result.exit_code == 2
     assert "Give a username" in result.stdout
+
+
+@respx.mock
+def test_parse_writes_silver_and_skips_stored_games(settings: Settings) -> None:
+    mock_api()
+    client = ChessComClient("t", delay=0, sleep=lambda _: None)
+    pipeline.fetch(settings, "testplayer", client=client, now=NOW)
+    report = pipeline.check(settings, "testplayer", now=NOW)
+    broken = report.valid[0].model_copy(update={"uuid": "broken", "pgn": "1. e4 e5 2. Ke3 *"})
+
+    first = pipeline.parse(settings, "testplayer", [*report.valid, broken], now=NOW)
+    second = pipeline.parse(settings, "testplayer", [*report.valid, broken], now=NOW)
+
+    assert (first.parsed, first.already_stored, len(first.rejected)) == (2, 0, 1)
+    assert (second.parsed, second.already_stored, len(second.rejected)) == (0, 2, 1)
+    conn = connect(settings.db_path)
+    assert conn.execute("SELECT count(*) FROM silver_games").fetchone() == (2,)
+    assert conn.execute("SELECT count(*) FROM silver_moves").fetchone() == (14,)
+    assert conn.execute("SELECT step, reason FROM quarantine ORDER BY step").fetchall() == [
+        ("check", "variant 'crazyhouse' is not supported"),
+        ("parse", "PGN could not be parsed"),
+    ]
+
+
+def test_rewriting_a_game_replaces_it(settings: Settings) -> None:
+    from chessguru.api.contracts import Game
+    from chessguru.parse.games import parse_game
+    from chessguru.parse.silver import write_games
+
+    conn = connect(settings.db_path)
+    parsed = parse_game(Game.model_validate(make_game(1)), "testplayer")
+
+    write_games(conn, [parsed], NOW)
+    write_games(conn, [parsed], NOW)
+    write_games(conn, [], NOW)
+
+    assert conn.execute("SELECT count(*) FROM silver_games").fetchone() == (1,)
+    assert conn.execute("SELECT count(*) FROM silver_moves").fetchone() == (7,)

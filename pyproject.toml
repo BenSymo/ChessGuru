@@ -11,6 +11,7 @@ dependencies = [
     "chess>=1.11",
     "duckdb>=1.0",
     "typer>=0.12",
+    "pyarrow>=16",
 ]
 
 [project.scripts]
@@ -46,7 +47,7 @@ mypy_path = "src"
 plugins = ["pydantic.mypy"]
 
 [[tool.mypy.overrides]]
-module = ["chess.*"]
+module = ["chess.*", "pyarrow.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]

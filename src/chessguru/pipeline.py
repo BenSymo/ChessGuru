@@ -2,14 +2,19 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 
 from chessguru.api.client import ChessComClient
+from chessguru.api.contracts import Game
 from chessguru.config import Settings
 from chessguru.db import connect, logged_run, replace_quarantine
 from chessguru.ingest.bronze import BronzeStore
 from chessguru.ingest.fetch import FetchSummary, fetch_recent_games
-from chessguru.quality.checks import CheckReport, check_games
+from chessguru.parse.games import ParsedGame, ParseError, parse_game
+from chessguru.parse.silver import stored_game_ids, write_games
+from chessguru.quality.checks import CheckReport, Rejected, check_games
 
 
 def fetch(
@@ -57,5 +62,45 @@ def check(settings: Settings, username: str, now: datetime | None = None) -> Che
                 warnings=report.warnings,
             )
         return report
+    finally:
+        conn.close()
+
+
+@dataclass
+class ParseSummary:
+    parsed: int = 0
+    already_stored: int = 0
+    rejected: list[Rejected] = field(default_factory=list)
+
+
+def parse(
+    settings: Settings, username: str, games: Sequence[Game], now: datetime | None = None
+) -> ParseSummary:
+    """Turn checked games into silver rows. Games already in silver are skipped."""
+    now = now or datetime.now(UTC)
+    name = username.lower()
+    summary = ParseSummary()
+    conn = connect(settings.db_path)
+    try:
+        with logged_run(conn, "parse", name) as details:
+            stored = stored_game_ids(conn, name)
+            parsed: list[ParsedGame] = []
+            for game in games:
+                if game.uuid in stored:
+                    summary.already_stored += 1
+                    continue
+                try:
+                    parsed.append(parse_game(game, name))
+                except ParseError as exc:
+                    summary.rejected.append(Rejected("silver", str(exc), game.url))
+            write_games(conn, parsed, now)
+            replace_quarantine(conn, name, summary.rejected, now, step="parse")
+            summary.parsed = len(parsed)
+            details.update(
+                parsed=summary.parsed,
+                already_stored=summary.already_stored,
+                quarantined=len(summary.rejected),
+            )
+        return summary
     finally:
         conn.close()

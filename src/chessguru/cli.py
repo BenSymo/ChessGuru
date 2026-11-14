@@ -71,6 +71,7 @@ def fetch(
     try:
         summary = pipeline.fetch(settings, name, max_games=games)
         report = pipeline.check(settings, name)
+        parsed = pipeline.parse(settings, name, report.valid)
     except (ChessComError, DataContractError) as exc:
         typer.echo(f"Error: {exc}")
         raise typer.Exit(code=1) from exc
@@ -79,10 +80,13 @@ def fetch(
     typer.echo(f"Months: {months}")
     typer.echo(f"  downloaded {len(summary.downloaded)}, reused {len(summary.cached)} from disk")
     limit = games or settings.max_games
-    typer.echo(f"Games ready: {len(report.valid)} (the newest {limit} will be analysed)")
-    if report.rejected:
-        typer.echo(f"Games set aside: {len(report.rejected)}")
-        reasons = Counter(r.reason for r in report.rejected)
+    ready = len(report.valid) - len(parsed.rejected)
+    typer.echo(f"Games ready: {ready} (the newest {limit} will be analysed)")
+    typer.echo(f"  {parsed.parsed} new, {parsed.already_stored} already stored")
+    rejected = report.rejected + parsed.rejected
+    if rejected:
+        typer.echo(f"Games set aside: {len(rejected)}")
+        reasons = Counter(r.reason for r in rejected)
         for reason, count in reasons.most_common():
             typer.echo(f"  {count} x {reason}")
     for warning in report.warnings:

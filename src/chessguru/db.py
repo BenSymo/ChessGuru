@@ -22,6 +22,8 @@ CREATE TABLE IF NOT EXISTS quarantine (
     reason          VARCHAR NOT NULL,
     quarantined_at  TIMESTAMPTZ NOT NULL
 );
+-- Added in milestone 3: which pipeline step set the game aside.
+ALTER TABLE quarantine ADD COLUMN IF NOT EXISTS step VARCHAR DEFAULT 'check';
 
 CREATE TABLE IF NOT EXISTS pipeline_runs (
     run_id       VARCHAR NOT NULL,
@@ -31,6 +33,56 @@ CREATE TABLE IF NOT EXISTS pipeline_runs (
     finished_at  TIMESTAMPTZ NOT NULL,
     status       VARCHAR NOT NULL,
     details      JSON
+);
+
+-- Silver: one row per game, from the analysed player's side of the board.
+CREATE TABLE IF NOT EXISTS silver_games (
+    username           VARCHAR NOT NULL,
+    game_uuid          VARCHAR NOT NULL,
+    url                VARCHAR NOT NULL,
+    end_time           TIMESTAMPTZ NOT NULL,
+    time_class         VARCHAR NOT NULL,
+    time_control       VARCHAR NOT NULL,
+    base_seconds       INTEGER,
+    increment_seconds  INTEGER,
+    rated              BOOLEAN NOT NULL,
+    player_colour      VARCHAR NOT NULL,
+    player_rating      INTEGER NOT NULL,
+    opponent_username  VARCHAR NOT NULL,
+    opponent_rating    INTEGER NOT NULL,
+    player_result      VARCHAR NOT NULL,
+    outcome            VARCHAR NOT NULL,
+    end_reason         VARCHAR NOT NULL,
+    eco_code           VARCHAR,
+    opening_name       VARCHAR,
+    opening_family     VARCHAR,
+    player_accuracy    DOUBLE,
+    opponent_accuracy  DOUBLE,
+    plies              INTEGER NOT NULL,
+    pgn                VARCHAR NOT NULL,
+    parsed_at          TIMESTAMPTZ NOT NULL,
+    PRIMARY KEY (username, game_uuid)
+);
+
+-- Silver: one row per move (ply) in each game.
+CREATE TABLE IF NOT EXISTS silver_moves (
+    username            VARCHAR NOT NULL,
+    game_uuid           VARCHAR NOT NULL,
+    ply                 INTEGER NOT NULL,
+    move_number         INTEGER NOT NULL,
+    colour              VARCHAR NOT NULL,
+    is_player_move      BOOLEAN NOT NULL,
+    san                 VARCHAR NOT NULL,
+    uci                 VARCHAR NOT NULL,
+    piece               VARCHAR NOT NULL,
+    is_capture          BOOLEAN NOT NULL,
+    is_check            BOOLEAN NOT NULL,
+    is_castle           BOOLEAN NOT NULL,
+    is_promotion        BOOLEAN NOT NULL,
+    fen_before          VARCHAR NOT NULL,
+    clock_seconds       DOUBLE,
+    time_spent_seconds  DOUBLE,
+    PRIMARY KEY (username, game_uuid, ply)
 );
 """
 
@@ -47,14 +99,20 @@ def replace_quarantine(
     username: str,
     rejected: Iterable[Rejected],
     when: datetime,
+    step: str = "check",
 ) -> None:
-    """Swap in this run's quarantined games, so re-running never duplicates rows."""
-    rows = [(username, r.source, r.game_url, r.reason, when) for r in rejected]
+    """Swap in this step's quarantined games, so re-running never duplicates rows."""
+    rows = [(username, r.source, r.game_url, r.reason, when, step) for r in rejected]
     conn.execute("BEGIN")
     try:
-        conn.execute("DELETE FROM quarantine WHERE username = ?", [username])
+        conn.execute("DELETE FROM quarantine WHERE username = ? AND step = ?", [username, step])
         if rows:
-            conn.executemany("INSERT INTO quarantine VALUES (?, ?, ?, ?, ?)", rows)
+            conn.executemany(
+                "INSERT INTO quarantine "
+                "(username, source_file, game_url, reason, quarantined_at, step) "
+                "VALUES (?, ?, ?, ?, ?, ?)",
+                rows,
+            )
         conn.execute("COMMIT")
     except BaseException:
         conn.execute("ROLLBACK")
