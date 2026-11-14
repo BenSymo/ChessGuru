@@ -39,7 +39,7 @@ Each step writes a row to the `pipeline_runs` table, saying whether it worked an
 | Path | What's there |
 |---|---|
 | `src/chessguru/cli.py` | The `chessguru` command (Typer): `run`, `fetch`, `analyse`, `build`, `tips`, `dashboard`, `doctor`, `docs`, `version` |
-| `src/chessguru/config.py` | Settings (`CHESSGURU_*` environment variables or `.env`), and finding Stockfish |
+| `src/chessguru/config.py` | Settings (`CHESSGURU_*` environment variables or `.env`; listed in the README). Finds Stockfish: the configured path, then the bundled copy (Windows app), then `stockfish` on PATH, then common install folders |
 | `src/chessguru/pipeline.py` | The pipeline steps, each logged to `pipeline_runs` |
 | `src/chessguru/db.py` | DuckDB connection, silver table definitions, schema version, run log |
 | `src/chessguru/api/` | chess.com client (`client.py`) and the data contract (`contracts.py`) |
@@ -144,7 +144,7 @@ older silver tables are dropped and rebuilt from bronze, which is always kept.
   | `missed_mate` | You had a forced mate and lost it. Also given to inaccuracies |
   | `allowed_mate` | Your move let the opponent force mate |
   | `missed_punish` | The opponent's previous move was a mistake or blunder, and you didn't take advantage |
-  | `low_clock` | You were under 10% of your starting time. Added later, in dbt |
+  | `low_clock` | A mistake or blunder made with under 10% of your starting time left. Added later, in dbt |
 
 - **Results:** stored in `silver_move_evals` (one row per move, both sides) and `silver_game_analysis` (depth and accuracy per game).
 
@@ -162,7 +162,7 @@ older silver tables are dropped and rebuilt from bronze, which is always kept.
 |---|---|---|
 | staging (views) | `stg_games`, `stg_moves`, `stg_move_evals`, `stg_game_analysis` | Clean names and types. Adds `score` (1 / ½ / 0). The raw opponent name is dropped here |
 | intermediate (views) | `int_player_move_evals`, `int_game_eval_stats`, `int_rating_changes` | Player's own moves plus `low_clock`. Per-game bad-move counts and peak win chance. Rating change points |
-| gold (tables) | `fact_game`, `fact_move`, `dim_date`, `dim_time_control`, `dim_opening`, `dim_opponent`, `dim_player` | Star schema. See below |
+| gold (tables) | `fact_game`, `fact_move`, `dim_date`, `dim_time_control`, `dim_opening`, `dim_opponent`, `dim_player` | Star schema. The dashboard reads the facts plus `dim_date`, `dim_time_control` and `dim_opening` |
 
 **The star schema:**
 - **`fact_game`:** one row per game.
@@ -196,7 +196,8 @@ older silver tables are dropped and rebuilt from bronze, which is always kept.
 - **`cost`:** roughly how many games' worth of points the problem cost.
   - For move patterns: the win-chance drop of the matching bad moves, summed per game, capped at 1 per game, divided by 100.
   - For results patterns (openings, colour, tilt): points below what you'd otherwise expect.
-- **`based_on`**, and **`games_affected`**: the problem must appear in at least 2 games.
+- **`based_on`:** how many games the tip looked at.
+- **`games_affected`:** how many of them show the problem. Most rules need at least 2.
 - **"Clear pattern" or "early sign":** clear means 3+ games affected out of 15+.
 - **Up to 3 examples:** positions or games. Examples already shown by a higher-ranked tip are skipped where possible.
 
@@ -246,22 +247,7 @@ older silver tables are dropped and rebuilt from bronze, which is always kept.
   - The same opponent always gets the same key, but the name can't be recovered without the key.
   - Deleting the key file changes every key. Delete the database too so they're rebuilt consistently.
 - **Excluded from git:** `data/` and `.env` are never committed (`.gitignore`).
-- **Starting again:** delete the data folder and run again. Bronze is the only thing that needs downloading again.
-
-## Settings
-
-All settings are read from `CHESSGURU_*` environment variables or a `.env` file
-(`config.py`, see `.env.example`):
-
-| Setting | Default | |
-|---|---|---|
-| `USERNAME` | none | Default player for commands |
-| `CONTACT` | none | Your email or a link, sent in the User-Agent as chess.com asks |
-| `DATA_DIR` | `./data` (`%LOCALAPPDATA%\ChessGuru` in the Windows app) | Where everything is stored |
-| `STOCKFISH_PATH` | auto | Otherwise: the bundled copy (Windows app), then `stockfish` on PATH, then common install folders |
-| `ENGINE_DEPTH` | 14 | Higher is slower and more accurate. About 2–3 s per game at 14 on 4 cores |
-| `MAX_GAMES` | 30 | Default number of newest games to fetch, analyse and show |
-| `HASH_KEY` | generated | Key for opponent hashes |
+- **Starting again:** delete `chessguru.duckdb` to rebuild every table from the downloaded files, or delete the whole data folder to start from scratch.
 
 ## The Windows app
 
@@ -294,12 +280,12 @@ Pushing a tag such as `v0.1.0` also publishes them as a GitHub release.
 - **Fake chess.com:** the API is faked with `respx`.
 - **Fake engine:** `tests/fake_engine.py` scores positions by material.
 - **Sample games:** built in `tests/factories.py`.
-- **Sample gold database:** one is built once per test session (`tests/conftest.py`) for the dbt, dashboard and tips tests.
+- **Sample gold database:** built once per test session (`tests/conftest.py`) for the dbt and dashboard tests. The tips tests use small hand-made tables instead.
 
 **Dashboard tests:** pages are rendered headlessly with Streamlit's `AppTest`.
 
 **`ci.yml`:**
-1. ruff (lint and format check), mypy (strict) and pytest
+1. installs Stockfish, then runs ruff (lint and format check), mypy (strict) and pytest
 2. builds the Docker image and runs `doctor` in it
 
 ## Things to know when changing the code

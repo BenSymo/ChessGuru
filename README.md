@@ -83,11 +83,11 @@ In the Windows app, use `ChessGuru.exe <command>` instead of `uv run chessguru <
 | `uv run chessguru dashboard` | Open the dashboard |
 | `uv run chessguru fetch <you>` | Just download and check games |
 | `uv run chessguru analyse <you> --depth 18` | Just the Stockfish step (deeper = slower, more accurate) |
-| `uv run chessguru build` | Just rebuild the gold tables with dbt |
+| `uv run chessguru build` | Just rebuild the tables the dashboard reads (with dbt) |
 | `uv run chessguru docs` | Generate the dbt docs site (models, tests, lineage) |
 | `uv run chessguru doctor` | Check settings and that Stockfish works |
 
-Games already analysed are never analysed again, so asking for more games only analyses the extra ones.
+Analysis is saved, so asking for more games only analyses the extra ones. Games are only analysed again if you ask for a greater depth.
 
 ## Settings
 
