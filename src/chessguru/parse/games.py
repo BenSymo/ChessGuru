@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import io
 import re
+from collections.abc import Callable
 from dataclasses import asdict, dataclass
 from datetime import datetime
 from typing import Any, Literal
@@ -47,6 +48,7 @@ class GameRow:
     player_colour: Colour
     player_rating: int
     opponent_username: str
+    opponent_key: str
     opponent_rating: int
     player_result: str
     outcome: Outcome
@@ -129,8 +131,11 @@ def opening_from_url(url: str | None) -> tuple[str | None, str | None]:
     return " ".join(words), " ".join(family)
 
 
-def parse_game(game: Game, username: str) -> ParsedGame:
-    """Build the silver rows for one game, from `username`'s side of the board."""
+def parse_game(game: Game, username: str, hash_name: Callable[[str], str]) -> ParsedGame:
+    """Build the silver rows for one game, from `username`'s side of the board.
+
+    `hash_name` turns the opponent's username into a key safe to share (see governance).
+    """
     colour = game.colour_of(username)
     if colour is None:
         raise ParseError(f"{username} did not play in this game")
@@ -202,6 +207,7 @@ def parse_game(game: Game, username: str) -> ParsedGame:
             player_colour=colour,
             player_rating=player.rating,
             opponent_username=opponent.username,
+            opponent_key=hash_name(opponent.username),
             opponent_rating=opponent.rating,
             player_result=player.result,
             outcome=outcome,

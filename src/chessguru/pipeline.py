@@ -10,11 +10,13 @@ from chessguru.api.client import ChessComClient
 from chessguru.api.contracts import Game
 from chessguru.config import Settings
 from chessguru.db import connect, logged_run, replace_quarantine
+from chessguru.governance.hashing import load_key, make_hasher
 from chessguru.ingest.bronze import BronzeStore
 from chessguru.ingest.fetch import FetchSummary, fetch_recent_games
 from chessguru.parse.games import ParsedGame, ParseError, parse_game
 from chessguru.parse.silver import stored_game_ids, write_games
 from chessguru.quality.checks import CheckReport, Rejected, check_games
+from chessguru.transform.dbt import DbtError, DbtResult, run_dbt
 
 
 def fetch(
@@ -80,6 +82,7 @@ def parse(
     now = now or datetime.now(UTC)
     name = username.lower()
     summary = ParseSummary()
+    hash_name = make_hasher(load_key(settings))
     conn = connect(settings.db_path)
     try:
         with logged_run(conn, "parse", name) as details:
@@ -90,7 +93,7 @@ def parse(
                     summary.already_stored += 1
                     continue
                 try:
-                    parsed.append(parse_game(game, name))
+                    parsed.append(parse_game(game, name, hash_name))
                 except ParseError as exc:
                     summary.rejected.append(Rejected("silver", str(exc), game.url))
             write_games(conn, parsed, now)
@@ -102,5 +105,30 @@ def parse(
                 quarantined=len(summary.rejected),
             )
         return summary
+    finally:
+        conn.close()
+
+
+def build(settings: Settings, username: str = "all") -> DbtResult:
+    """Build and test the gold layer with dbt."""
+    conn = connect(settings.db_path)  # makes sure the silver tables exist
+    conn.close()
+    result: DbtResult | None = None
+    error: Exception | None = None
+    try:
+        result = run_dbt(settings, "build")
+    except DbtError as exc:
+        error = exc
+    # DuckDB allows one writer at a time, so log only after dbt has finished.
+    conn = connect(settings.db_path)
+    try:
+        with logged_run(conn, "build", username) as details:
+            if error:
+                raise error
+            assert result is not None
+            details.update(passed=result.passed, failures=result.failures)
+            if result.failures:
+                raise DbtError("; ".join(result.failures))
+        return result
     finally:
         conn.close()

@@ -1,0 +1,14 @@
+version: 2
+
+models:
+  - name: mart_opening_performance
+    description: Results for each opening family, by colour and time class.
+    columns:
+      - name: score_pct
+        data_tests: [not_null]
+  - name: mart_rating_trend
+    description: End-of-day rating per time class.
+  - name: mart_time_management
+    description: Time spent per move, by move range.
+  - name: mart_game_endings
+    description: Count of games by outcome and how they ended.

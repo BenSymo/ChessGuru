@@ -1,0 +1,33 @@
+version: 2
+
+models:
+  - name: stg_games
+    description: Games with tidy types, a numeric score and the opponent's name hashed.
+    columns:
+      - name: game_uuid
+        data_tests: [not_null]
+      - name: outcome
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [win, draw, loss]
+      - name: player_colour
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [white, black]
+      - name: time_class
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [bullet, blitz, rapid, daily]
+
+  - name: stg_moves
+    columns:
+      - name: ply
+        data_tests: [not_null]
+      - name: colour
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [white, black]

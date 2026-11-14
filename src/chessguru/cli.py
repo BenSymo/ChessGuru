@@ -11,6 +11,7 @@ from chessguru import __version__, pipeline
 from chessguru.api.client import ChessComError
 from chessguru.config import Settings
 from chessguru.quality.checks import DataContractError
+from chessguru.transform.dbt import DbtError, run_dbt
 
 app = typer.Typer(
     help="See where you're going wrong at chess and what to fix first.",
@@ -52,22 +53,72 @@ def doctor() -> None:
         raise typer.Exit(code=1)
 
 
-@app.command()
-def fetch(
-    username: Annotated[
-        str | None, typer.Argument(help="chess.com username. Defaults to CHESSGURU_USERNAME.")
-    ] = None,
-    games: Annotated[
-        int | None, typer.Option("--games", "-n", min=1, help="How many recent games to get.")
-    ] = None,
-) -> None:
-    """Download your recent games from chess.com and check them."""
-    settings = Settings()
+UsernameArg = Annotated[
+    str | None, typer.Argument(help="chess.com username. Defaults to CHESSGURU_USERNAME.")
+]
+GamesOpt = Annotated[
+    int | None, typer.Option("--games", "-n", min=1, help="How many recent games to get.")
+]
+
+
+def _username(settings: Settings, username: str | None) -> str:
     name = (username or settings.username or "").strip().lower()
     if not name:
         typer.echo("Give a username, e.g. `chessguru fetch myname`, or set CHESSGURU_USERNAME.")
         raise typer.Exit(code=2)
+    return name
 
+
+@app.command()
+def fetch(username: UsernameArg = None, games: GamesOpt = None) -> None:
+    """Download your recent games from chess.com, check them and split them into moves."""
+    settings = Settings()
+    _fetch(settings, _username(settings, username), games)
+
+
+@app.command()
+def build() -> None:
+    """Build and test the gold tables with dbt."""
+    _build(Settings())
+
+
+@app.command()
+def run(username: UsernameArg = None, games: GamesOpt = None) -> None:
+    """Do everything: fetch, check, split into moves, and build the gold tables."""
+    settings = Settings()
+    _fetch(settings, _username(settings, username), games)
+    _build(settings)
+
+
+@app.command()
+def docs() -> None:
+    """Generate the dbt docs site (models, tests and lineage)."""
+    settings = Settings()
+    try:
+        run_dbt(settings, "docs generate")
+    except DbtError as exc:
+        typer.echo(f"Error: {exc}")
+        raise typer.Exit(code=1) from exc
+    target = settings.dbt_target_dir.resolve()
+    typer.echo(f"Docs written to {target / 'index.html'}")
+    typer.echo(
+        "To browse them: uv run dbt docs serve --project-dir dbt --profiles-dir dbt "
+        f"--target-path {target}"
+    )
+
+
+def _build(settings: Settings) -> None:
+    try:
+        result = pipeline.build(settings)
+    except DbtError as exc:
+        typer.echo(f"Gold build failed: {exc}")
+        raise typer.Exit(code=1) from exc
+    typer.echo(f"Gold tables built: {result.passed} models and tests passed")
+    for warning in result.warnings:
+        typer.echo(f"Warning: {warning}")
+
+
+def _fetch(settings: Settings, name: str, games: int | None) -> None:
     try:
         summary = pipeline.fetch(settings, name, max_games=games)
         report = pipeline.check(settings, name)

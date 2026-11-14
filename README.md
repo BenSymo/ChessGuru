@@ -5,7 +5,7 @@ Quickly see where you're going wrong at chess and what to fix first to reach the
 ChessGuru downloads your games from chess.com, scores every move with Stockfish, and ranks your
 biggest weaknesses by how many games they cost you. Everything runs on your own machine.
 
-> **Status:** early development. Milestones 1–3 are done: setup, downloading + checking games, and splitting them into moves. See [the plan](docs/PLAN.md).
+> **Status:** early development. Milestones 1–4 are done: setup, downloading + checking games, splitting them into moves, and the gold tables. See [the plan](docs/PLAN.md).
 
 ## What you need
 
@@ -40,6 +40,35 @@ then split into one row per move, with clock times and time spent (the silver la
 kept on disk, so later runs only download what's new.
 
 Use `--games 100` to look at more games than the default 30.
+
+## Build the gold tables
+
+```bash
+uv run chessguru build      # just the dbt step
+uv run chessguru run <you>  # fetch + check + parse + build, all in one
+uv run chessguru docs       # dbt docs site with lineage
+```
+
+dbt turns the silver tables into a star schema in the `gold` schema of
+`data/chessguru.duckdb`:
+
+| Table | One row per |
+|---|---|
+| `fact_game` | game, from your side of the board |
+| `fact_move` | move (both sides; `is_player_move` marks yours) |
+| `dim_player` | rating change per time class (Type 2: history is kept) |
+| `dim_opponent` | opponent, known only by a keyed hash of their username |
+| `dim_opening`, `dim_time_control`, `dim_date` | opening, time control, day |
+| `mart_*` | ready-made summaries for the dashboard |
+
+Every build also runs the dbt tests: keys are unique, facts link to their
+dimensions, every silver game reaches gold, and no real opponent names appear.
+
+## Privacy
+
+Opponents' usernames are hashed with HMAC-SHA256 before they reach the gold
+tables. The key is `CHESSGURU_HASH_KEY`, or a random key created in
+`data/.hash_key` on first run. Your `data/` folder and `.env` are never committed.
 
 ## Settings
 

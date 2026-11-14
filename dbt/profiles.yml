@@ -1,0 +1,9 @@
+# ChessGuru sets CHESSGURU_DB_PATH when it runs dbt. The default lets you run
+# `dbt build` by hand from this folder.
+chessguru:
+  target: local
+  outputs:
+    local:
+      type: duckdb
+      path: "{{ env_var('CHESSGURU_DB_PATH', '../data/chessguru.duckdb') }}"
+      threads: 4

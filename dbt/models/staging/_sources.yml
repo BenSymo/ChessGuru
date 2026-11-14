@@ -1,0 +1,11 @@
+version: 2
+
+sources:
+  - name: silver
+    description: Cleaned games and moves written by the ChessGuru parse step.
+    schema: main
+    tables:
+      - name: silver_games
+        description: One row per game, from the analysed player's side.
+      - name: silver_moves
+        description: One row per move (ply) in each game.

@@ -18,6 +18,7 @@ RUN uv sync --frozen --no-dev --no-install-project
 
 COPY README.md ./
 COPY src ./src
+COPY dbt ./dbt
 RUN uv sync --frozen --no-dev
 
 # Run as a normal user, not root.

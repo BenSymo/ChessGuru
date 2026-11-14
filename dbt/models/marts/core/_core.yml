@@ -1,0 +1,80 @@
+version: 2
+
+models:
+  - name: fact_game
+    description: "Grain: one row per game, from the analysed player's side."
+    columns:
+      - name: game_key
+        data_tests: [unique, not_null]
+      - name: game_uuid
+        description: chess.com's own game ID, kept alongside the surrogate key.
+        data_tests: [not_null]
+      - name: date_key
+        data_tests:
+          - not_null
+          - relationships:
+              arguments: {to: ref('dim_date'), field: date_key}
+      - name: time_control_key
+        data_tests:
+          - relationships:
+              arguments: {to: ref('dim_time_control'), field: time_control_key}
+      - name: opening_key
+        data_tests:
+          - relationships:
+              arguments: {to: ref('dim_opening'), field: opening_key}
+      - name: opponent_key
+        data_tests:
+          - not_null
+          - relationships:
+              arguments: {to: ref('dim_opponent'), field: opponent_key}
+      - name: player_key
+        data_tests:
+          - not_null
+          - relationships:
+              arguments: {to: ref('dim_player'), field: player_key}
+      - name: score
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [0.0, 0.5, 1.0]
+                quote: false
+      - name: recency_rank
+        data_tests: [not_null]
+
+  - name: fact_move
+    description: "Grain: one row per move (ply), both sides of the board."
+    columns:
+      - name: move_key
+        data_tests: [unique, not_null]
+      - name: game_key
+        data_tests:
+          - not_null
+          - relationships:
+              arguments: {to: ref('fact_game'), field: game_key}
+
+  - name: dim_date
+    columns:
+      - name: date_key
+        data_tests: [unique, not_null]
+
+  - name: dim_time_control
+    columns:
+      - name: time_control_key
+        data_tests: [unique, not_null]
+
+  - name: dim_opening
+    columns:
+      - name: opening_key
+        data_tests: [unique, not_null]
+
+  - name: dim_opponent
+    description: Opponents, known only by a keyed hash of their username.
+    columns:
+      - name: opponent_key
+        data_tests: [unique, not_null]
+
+  - name: dim_player
+    description: "Type 2: one row per rating change, per time class."
+    columns:
+      - name: player_key
+        data_tests: [unique, not_null]

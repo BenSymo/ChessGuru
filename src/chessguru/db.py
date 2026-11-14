@@ -14,6 +14,10 @@ import duckdb
 
 from chessguru.quality.checks import Rejected
 
+# Bump this when the silver tables change shape. Silver can always be rebuilt
+# from bronze, so an older version just drops silver and parses again.
+SCHEMA_VERSION = 2
+
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS quarantine (
     username        VARCHAR NOT NULL,
@@ -49,6 +53,7 @@ CREATE TABLE IF NOT EXISTS silver_games (
     player_colour      VARCHAR NOT NULL,
     player_rating      INTEGER NOT NULL,
     opponent_username  VARCHAR NOT NULL,
+    opponent_key       VARCHAR NOT NULL,
     opponent_rating    INTEGER NOT NULL,
     player_result      VARCHAR NOT NULL,
     outcome            VARCHAR NOT NULL,
@@ -90,8 +95,30 @@ CREATE TABLE IF NOT EXISTS silver_moves (
 def connect(path: Path) -> duckdb.DuckDBPyConnection:
     path.parent.mkdir(parents=True, exist_ok=True)
     conn = duckdb.connect(str(path))
+    _migrate(conn)
     conn.execute(SCHEMA)
     return conn
+
+
+def _migrate(conn: duckdb.DuckDBPyConnection) -> None:
+    conn.execute("CREATE TABLE IF NOT EXISTS schema_version (version INTEGER NOT NULL)")
+    row = conn.execute("SELECT max(version) FROM schema_version").fetchone()
+    current = row[0] if row and row[0] is not None else None
+    if current == SCHEMA_VERSION:
+        return
+    if current is not None or _table_exists(conn, "silver_games"):
+        # Older silver tables: drop them; the next parse rebuilds them from bronze.
+        conn.execute("DROP TABLE IF EXISTS silver_moves")
+        conn.execute("DROP TABLE IF EXISTS silver_games")
+    conn.execute("DELETE FROM schema_version")
+    conn.execute("INSERT INTO schema_version VALUES (?)", [SCHEMA_VERSION])
+
+
+def _table_exists(conn: duckdb.DuckDBPyConnection, name: str) -> bool:
+    row = conn.execute(
+        "SELECT count(*) FROM information_schema.tables WHERE table_name = ?", [name]
+    ).fetchone()
+    return bool(row and row[0])
 
 
 def replace_quarantine(
