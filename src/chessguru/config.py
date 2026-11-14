@@ -65,4 +65,3 @@ class Settings(BaseSettings):
             return self.stockfish_path if self.stockfish_path.exists() else None
         found = shutil.which("stockfish")
         return Path(found) if found else None
-
