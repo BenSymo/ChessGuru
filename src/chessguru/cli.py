@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections import Counter
+from pathlib import Path
 from typing import Annotated
 
 import typer
@@ -40,7 +41,7 @@ def doctor() -> None:
         ("Username", settings.username or "not set (pass it on the command line)"),
         ("Contact", settings.contact or "not set (chess.com asks for one)"),
         ("Data folder", str(settings.data_dir)),
-        ("Stockfish", str(stockfish) if stockfish else "NOT FOUND"),
+        ("Stockfish", _stockfish_status(stockfish)),
         ("Engine depth", str(settings.engine_depth)),
         ("Games to analyse", str(settings.max_games)),
         ("Hash key", "set" if settings.hash_key else "not set"),
@@ -49,9 +50,26 @@ def doctor() -> None:
     for label, value in rows:
         typer.echo(f"{label:<{width}}  {value}")
 
-    if stockfish is None:
+    if stockfish is None or not _stockfish_works(stockfish):
         typer.echo("\nStockfish is needed for analysis. See the README for how to install it.")
         raise typer.Exit(code=1)
+
+
+def _stockfish_works(path: Path) -> bool:
+    """Start Stockfish and stop it again, to check it runs on this computer."""
+    import chess.engine
+
+    try:
+        chess.engine.SimpleEngine.popen_uci(str(path), timeout=20).quit()
+    except (OSError, chess.engine.EngineError, TimeoutError):
+        return False
+    return True
+
+
+def _stockfish_status(path: Path | None) -> str:
+    if path is None:
+        return "NOT FOUND"
+    return f"{path} (working)" if _stockfish_works(path) else f"{path} (FOUND BUT WON'T START)"
 
 
 UsernameArg = Annotated[
@@ -168,13 +186,12 @@ def dashboard(
     port: Annotated[int, typer.Option(help="Port to serve the dashboard on.")] = 8501,
 ) -> None:
     """Open the dashboard in your browser."""
-    import subprocess
-    import sys
-    from pathlib import Path
+
+    from chessguru.frozen import is_frozen
 
     app_file = Path(__file__).parent / "app" / "main.py"
-    command = [
-        sys.executable, "-m", "streamlit", "run", str(app_file),
+    args = [
+        "streamlit", "run", str(app_file),
         "--server.port", str(port),
         "--browser.gatherUsageStats", "false",
         "--client.toolbarMode", "minimal",
@@ -182,7 +199,22 @@ def dashboard(
         "--theme.light.primaryColor", "#2a78d6",
         "--theme.dark.primaryColor", "#3987e5",
     ]  # fmt: skip
-    raise typer.Exit(subprocess.call(command))
+    if is_frozen():
+        # Streamlit thinks it's in development mode when not installed normally.
+        args += ["--global.developmentMode", "false", "--server.fileWatcherType", "none"]
+        typer.echo(f"ChessGuru is running at http://localhost:{port}")
+        typer.echo("Keep this window open while you use it. Close it to stop ChessGuru.")
+    _run_streamlit(args)
+
+
+def _run_streamlit(args: list[str]) -> None:
+    """Run Streamlit in this process (works the same from source and the packaged app)."""
+    import sys
+
+    from streamlit.web import cli as streamlit_cli
+
+    sys.argv = args
+    streamlit_cli.main()
 
 
 @app.command()

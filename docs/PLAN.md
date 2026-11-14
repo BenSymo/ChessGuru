@@ -58,5 +58,6 @@ Game Viewer · Data Health
 5. Stockfish analysis, move labels, phases, mistake tags
 6. Dashboard pages
 7. Tip rules, Tips page, Game Viewer
-8. Airflow DAG + Docker Compose
-9. Governance polish + README
+8. Windows app: one installer with Python, the libraries and Stockfish bundled
+9. Airflow DAG + Docker Compose
+10. Governance polish + README

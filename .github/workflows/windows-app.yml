@@ -1,0 +1,111 @@
+name: Windows app
+
+# Builds ChessGuru-Setup.exe (and a portable zip) on Windows, then checks the
+# packaged app works. Tagging a version (e.g. v0.1.0) also publishes a release.
+
+on:
+  push:
+    branches: ["**"]
+    tags: ["v*"]
+    paths:
+      - "src/**"
+      - "dbt/**"
+      - "packaging/**"
+      - "pyproject.toml"
+      - "uv.lock"
+      - ".github/workflows/windows-app.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  STOCKFISH_URL: https://github.com/official-stockfish/Stockfish/releases/download/sf_17.1/stockfish-windows-x86-64-avx2.zip
+  STOCKFISH_SHA256: 92a77f8d8116b4331696eeb7b232bd03db30d6641a6ce1be1759478b8931d28b
+
+jobs:
+  build:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v4.2.2
+      - uses: astral-sh/setup-uv@v5.4.1
+        with:
+          python-version: "3.12"
+
+      - name: Download Stockfish
+        run: |
+          Invoke-WebRequest $env:STOCKFISH_URL -OutFile sf.zip
+          $hash = (Get-FileHash sf.zip -Algorithm SHA256).Hash.ToLower()
+          if ($hash -ne $env:STOCKFISH_SHA256) { throw "Stockfish checksum mismatch: $hash" }
+          Expand-Archive sf.zip -DestinationPath sf
+          New-Item -ItemType Directory packaging/stockfish | Out-Null
+          Copy-Item sf/stockfish/stockfish-windows-x86-64-avx2.exe packaging/stockfish/stockfish.exe
+          Copy-Item sf/stockfish/Copying.txt packaging/stockfish/COPYING.txt
+          Copy-Item sf/stockfish/AUTHORS packaging/stockfish/AUTHORS.txt
+
+      - name: Install
+        run: uv sync --frozen --group build
+
+      - name: Build the app
+        run: uv run pyinstaller packaging/chessguru.spec --noconfirm
+
+      - name: Check the packaged app
+        env:
+          LOCALAPPDATA: ${{ runner.temp }}\appdata
+        run: |
+          $exe = "dist\ChessGuru\ChessGuru.exe"
+          & $exe version; if ($LASTEXITCODE) { throw "version failed" }
+          & $exe doctor; if ($LASTEXITCODE) { throw "doctor failed" }
+          & $exe build; if ($LASTEXITCODE) { throw "gold build failed" }
+
+      - name: Check the dashboard starts
+        env:
+          LOCALAPPDATA: ${{ runner.temp }}\appdata
+          STREAMLIT_SERVER_HEADLESS: "true"
+        run: |
+          $app = Start-Process dist\ChessGuru\ChessGuru.exe -PassThru
+          $ok = $false
+          foreach ($i in 1..60) {
+            try {
+              if ((Invoke-WebRequest http://localhost:8501/_stcore/health -UseBasicParsing).Content -eq "ok") { $ok = $true; break }
+            } catch {}
+            Start-Sleep -Seconds 2
+          }
+          Stop-Process -Id $app.Id -Force
+          if (-not $ok) { throw "dashboard did not start" }
+
+      - name: Build the installer
+        run: |
+          choco install innosetup -y --no-progress
+          $version = (uv run chessguru version | Select-Object -Last 1).Trim()
+          & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" "/DAppVersion=$version" packaging\installer.iss
+          if ($LASTEXITCODE) { throw "installer build failed" }
+          Compress-Archive dist\ChessGuru -DestinationPath packaging\Output\ChessGuru-portable.zip
+
+      - uses: actions/upload-artifact@v4.6.2
+        with:
+          name: ChessGuru-windows
+          path: |
+            packaging/Output/ChessGuru-Setup.exe
+            packaging/Output/ChessGuru-portable.zip
+          retention-days: 30
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4.3.0
+        with:
+          name: ChessGuru-windows
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >
+          gh release create "$GITHUB_REF_NAME" ChessGuru-Setup.exe ChessGuru-portable.zip
+          --repo "$GITHUB_REPOSITORY" --title "ChessGuru $GITHUB_REF_NAME" --generate-notes

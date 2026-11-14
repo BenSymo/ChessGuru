@@ -13,6 +13,7 @@ from pydantic import Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from chessguru import __version__
+from chessguru.frozen import app_data_dir, bundled_stockfish, is_frozen
 
 STOCKFISH_LOCATIONS = (
     Path("/usr/games/stockfish"),  # Debian / Ubuntu
@@ -21,17 +22,28 @@ STOCKFISH_LOCATIONS = (
 )
 
 
+def _env_files() -> tuple[Path, ...]:
+    """Settings files to read. The packaged app also reads one in its data folder."""
+    if is_frozen():
+        return (Path(".env"), app_data_dir() / ".env")
+    return (Path(".env"),)
+
+
+def _default_data_dir() -> Path:
+    return app_data_dir() if is_frozen() else Path("./data")
+
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_prefix="CHESSGURU_",
-        env_file=".env",
+        env_file=_env_files(),
         env_file_encoding="utf-8",
         extra="ignore",
     )
 
     username: str | None = None
     contact: str | None = None
-    data_dir: Path = Path("./data")
+    data_dir: Path = Field(default_factory=_default_data_dir)
     stockfish_path: Path | None = None
     engine_depth: int = Field(default=14, ge=1, le=40)
     max_games: int = Field(default=30, ge=1)
@@ -75,6 +87,9 @@ class Settings(BaseSettings):
         """Return the Stockfish binary to use, or None if it can't be found."""
         if self.stockfish_path:
             return self.stockfish_path if self.stockfish_path.exists() else None
+        bundled = bundled_stockfish()
+        if bundled:
+            return bundled
         found = shutil.which("stockfish")
         if found:
             return Path(found)

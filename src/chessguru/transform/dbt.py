@@ -5,14 +5,17 @@ from __future__ import annotations
 import json
 import os
 import subprocess
-import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 
 from chessguru.config import Settings
+from chessguru.frozen import bundle_dir, dbt_command, is_frozen
 
-# src/chessguru/transform/dbt.py -> repository (or /app in Docker) -> dbt/
-DEFAULT_PROJECT_DIR = Path(__file__).resolve().parents[3] / "dbt"
+# src/chessguru/transform/dbt.py -> repository (or /app in Docker) -> dbt/.
+# The packaged app carries the dbt project inside its own folder.
+DEFAULT_PROJECT_DIR = (
+    bundle_dir() / "dbt" if is_frozen() else Path(__file__).resolve().parents[3] / "dbt"
+)
 
 
 class DbtError(Exception):
@@ -42,7 +45,7 @@ def run_dbt(settings: Settings, command: str, project_dir: Path | None = None) -
 
     target = settings.dbt_target_dir.resolve()
     args = [
-        sys.executable, "-c", "from dbt.cli.main import cli; cli()",
+        *dbt_command(),
         *command.split(),
         "--project-dir", str(project),
         "--profiles-dir", str(project),
@@ -54,8 +57,16 @@ def run_dbt(settings: Settings, command: str, project_dir: Path | None = None) -
     settings.data_dir.mkdir(parents=True, exist_ok=True)
     results_file = target / "run_results.json"
     results_file.unlink(missing_ok=True)
-    env = {**os.environ, "CHESSGURU_DB_PATH": str(settings.db_path.resolve()), "DO_NOT_TRACK": "1"}
-    process = subprocess.run(args, env=env, capture_output=True, text=True, check=False)
+    env = {
+        **os.environ,
+        "CHESSGURU_DB_PATH": str(settings.db_path.resolve()),
+        "DO_NOT_TRACK": "1",
+        "PYTHONUTF8": "1",  # Windows would otherwise use its old code page
+    }
+    process = subprocess.run(
+        args, env=env, capture_output=True, text=True, encoding="utf-8", errors="replace",
+        check=False,
+    )  # fmt: skip
 
     result = _summarise(results_file)
     if process.returncode != 0 and not result.failures:

@@ -5,9 +5,29 @@ Quickly see where you're going wrong at chess and what to fix first to reach the
 ChessGuru downloads your games from chess.com, scores every move with Stockfish, and ranks your
 biggest weaknesses by how many games they cost you. Everything runs on your own machine.
 
-> **Status:** early development. Milestones 1–7 are done: downloading and checking games, Stockfish analysis, the gold tables, the dashboard, and ranked tips. See [the plan](docs/PLAN.md).
+> **Status:** early development. Milestones 1–8 are done: downloading and checking games, Stockfish analysis, the gold tables, the dashboard, ranked tips, and a Windows app. See [the plan](docs/PLAN.md).
 
-## What you need
+## Windows: download and run
+
+No Python or Stockfish install needed. Everything is inside the app.
+
+1. Download **ChessGuru-Setup.exe** from the [Releases page](https://github.com/BenSymo/ChessGuru/releases)
+   (or, before the first release, from the latest successful **Windows app** run under the
+   repository's **Actions** tab, in its **Artifacts** section).
+2. Run it. Windows may say *"Windows protected your PC"* because the app isn't signed:
+   click **More info**, then **Run anyway**.
+3. Open **ChessGuru** from the Start menu or desktop. A window opens to show it's running and
+   the dashboard opens in your browser. Close that window to stop ChessGuru.
+
+Your games and settings are kept in `%LOCALAPPDATA%\ChessGuru`. To change a setting, put a
+`.env` file there (see `.env.example`). The bundled Stockfish needs a CPU from about 2013 or newer
+(AVX2). The app can also be used from a terminal, e.g. `ChessGuru.exe doctor`.
+
+There is also **ChessGuru-portable.zip**: unzip it anywhere and run `ChessGuru.exe`, no install.
+
+## Run from source
+
+### What you need
 
 - Python 3.12 or newer
 - [uv](https://docs.astral.sh/uv/) to install and run the project
@@ -16,7 +36,7 @@ biggest weaknesses by how many games they cost you. Everything runs on your own 
   - Ubuntu/Debian: `sudo apt install stockfish`
   - Windows: download it, then set `CHESSGURU_STOCKFISH_PATH` in `.env`
 
-## Set up
+### Set up
 
 ```bash
 git clone https://github.com/BenSymo/ChessGuru.git
@@ -172,3 +192,13 @@ uv run pytest              # tests with coverage
 ```
 
 CI runs all of these, then builds the Docker image, on every push and pull request.
+
+## Building the Windows app
+
+The **Windows app** GitHub workflow builds it on every change: it bundles Python, the libraries,
+the dbt project and Stockfish 17.1 with PyInstaller (`packaging/chessguru.spec`), checks the
+packaged app works (doctor, a gold build, the dashboard starting), then wraps it in an installer
+with Inno Setup (`packaging/installer.iss`). Pushing a tag like `v0.1.0` publishes a release.
+
+Stockfish is free software under the GPL v3; its licence is shipped in the app's
+`_internal\stockfish` folder, and its source is at https://github.com/official-stockfish/Stockfish.

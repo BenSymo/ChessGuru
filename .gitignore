@@ -28,3 +28,9 @@ dbt/dbt_packages/
 .vscode/
 .idea/
 .DS_Store
+
+# Packaged app (PyInstaller / Inno Setup)
+/dist/
+/build/
+/packaging/stockfish/
+/packaging/Output/
