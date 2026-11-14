@@ -29,10 +29,13 @@ Airflow runs the steps daily in full-stack mode. Lite mode runs the same steps f
 
 ## Analysis
 
-- Move labels by drop in winning chances: inaccuracy `?!` > 10%, mistake `?` > 20%, blunder `??` > 30%.
+- Move labels by drop in winning chances (Lichess thresholds): inaccuracy `?!` 5+ points,
+  mistake `?` 10+, blunder `??` 15+.
 - Accuracy from winning chances; game phase (opening, middlegame, endgame).
-- Mistake tags: hanging piece, missed fork/pin/skewer, missed or allowed mate,
-  failed to convert +3, low-clock blunder.
+- Mistake tags: hanging piece, missed fork/pin/skewer, missed or allowed mate, missed punish,
+  low-clock blunder; per game: failed to convert (75%+ win chance, about +3, but no win).
+- The number of games analysed is changeable (`--games`, `CHESSGURU_MAX_GAMES`, and later the
+  dashboard); results are cached so only new games are analysed.
 
 ## Tips
 

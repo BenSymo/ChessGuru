@@ -5,7 +5,7 @@ Quickly see where you're going wrong at chess and what to fix first to reach the
 ChessGuru downloads your games from chess.com, scores every move with Stockfish, and ranks your
 biggest weaknesses by how many games they cost you. Everything runs on your own machine.
 
-> **Status:** early development. Milestones 1–4 are done: setup, downloading + checking games, splitting them into moves, and the gold tables. See [the plan](docs/PLAN.md).
+> **Status:** early development. Milestones 1–5 are done: downloading and checking games, splitting them into moves, Stockfish analysis, and the gold tables. See [the plan](docs/PLAN.md).
 
 ## What you need
 
@@ -41,11 +41,37 @@ kept on disk, so later runs only download what's new.
 
 Use `--games 100` to look at more games than the default 30.
 
+## Analyse your games
+
+```bash
+uv run chessguru run <you>                # everything, newest 30 games
+uv run chessguru run <you> --games 100    # analyse more games
+uv run chessguru analyse <you> --depth 18 # just the Stockfish step, deeper
+```
+
+Stockfish scores every position. Each move is then labelled by how much it lowered
+your chance of winning (Lichess's thresholds):
+
+| Label | Drop in win chance |
+|---|---|
+| Inaccuracy `?!` | 5+ points |
+| Mistake `?` | 10+ points |
+| Blunder `??` | 15+ points |
+
+Bad moves are also tagged with a reason where one can be spotted: `hanging_piece`,
+`missed_fork`, `missed_pin`, `missed_skewer`, `missed_mate`, `allowed_mate`,
+`missed_punish` (the opponent had just gone wrong) and `low_clock` (under 10% of your
+time left). Each game is split into opening, middlegame and endgame.
+
+Results are saved, so changing the number of games only analyses the extra ones.
+Expect roughly 2–3 seconds per game on a 4-core laptop at depth 14. To change the
+default, set `CHESSGURU_MAX_GAMES` and `CHESSGURU_ENGINE_DEPTH` in `.env`.
+
 ## Build the gold tables
 
 ```bash
 uv run chessguru build      # just the dbt step
-uv run chessguru run <you>  # fetch + check + parse + build, all in one
+uv run chessguru run <you>  # fetch + check + parse + analyse + build
 uv run chessguru docs       # dbt docs site with lineage
 ```
 

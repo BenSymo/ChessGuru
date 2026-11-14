@@ -74,3 +74,14 @@ def test_resolve_stockfish_searches_path(monkeypatch: pytest.MonkeyPatch) -> Non
     monkeypatch.setattr("shutil.which", lambda name: "/usr/games/stockfish")
 
     assert Settings().resolve_stockfish() == Path("/usr/games/stockfish")
+
+
+def test_resolve_stockfish_checks_common_folders(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    binary = tmp_path / "stockfish"
+    binary.write_text("")
+    monkeypatch.setattr("shutil.which", lambda name: None)
+    monkeypatch.setattr("chessguru.config.STOCKFISH_LOCATIONS", (tmp_path / "nope", binary))
+
+    assert Settings().resolve_stockfish() == binary

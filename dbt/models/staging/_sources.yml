@@ -9,3 +9,7 @@ sources:
         description: One row per game, from the analysed player's side.
       - name: silver_moves
         description: One row per move (ply) in each game.
+      - name: silver_move_evals
+        description: Stockfish's verdict on each move, from the mover's point of view.
+      - name: silver_game_analysis
+        description: Which games have been analysed, at what depth.

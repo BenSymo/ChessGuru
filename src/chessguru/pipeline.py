@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 
+from chessguru.analysis.engine import EngineError, Evaluator, StockfishEvaluator
+from chessguru.analysis.store import AnalyseSummary, Progress, analyse_games
 from chessguru.api.client import ChessComClient
 from chessguru.api.contracts import Game
 from chessguru.config import Settings
@@ -130,5 +132,52 @@ def build(settings: Settings, username: str = "all") -> DbtResult:
             if result.failures:
                 raise DbtError("; ".join(result.failures))
         return result
+    finally:
+        conn.close()
+
+
+def analyse(
+    settings: Settings,
+    username: str,
+    max_games: int | None = None,
+    make_evaluator: Callable[[], Evaluator] | None = None,
+    workers: int | None = None,
+    progress: Progress | None = None,
+    now: datetime | None = None,
+) -> AnalyseSummary:
+    """Run Stockfish over the newest games. Games already analysed are skipped."""
+    now = now or datetime.now(UTC)
+    name = username.lower()
+    if make_evaluator is None:
+        path = settings.resolve_stockfish()
+        if path is None:
+            raise EngineError(
+                "Stockfish was not found. Install it, or set CHESSGURU_STOCKFISH_PATH."
+            )
+        depth = settings.engine_depth
+
+        def make_evaluator() -> Evaluator:
+            return StockfishEvaluator(path, depth)
+
+    conn = connect(settings.db_path)
+    try:
+        with logged_run(conn, "analyse", name) as details:
+            summary = analyse_games(
+                conn,
+                name,
+                max_games or settings.max_games,
+                settings.engine_depth,
+                make_evaluator,
+                now,
+                workers=workers,
+                progress=progress,
+            )
+            details.update(
+                selected=summary.selected,
+                analysed=summary.analysed,
+                already_done=summary.already_done,
+                depth=settings.engine_depth,
+            )
+        return summary
     finally:
         conn.close()

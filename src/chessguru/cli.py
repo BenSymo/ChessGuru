@@ -8,6 +8,7 @@ from typing import Annotated
 import typer
 
 from chessguru import __version__, pipeline
+from chessguru.analysis.engine import EngineError
 from chessguru.api.client import ChessComError
 from chessguru.config import Settings
 from chessguru.quality.checks import DataContractError
@@ -76,6 +77,18 @@ def fetch(username: UsernameArg = None, games: GamesOpt = None) -> None:
     _fetch(settings, _username(settings, username), games)
 
 
+DepthOpt = Annotated[
+    int | None, typer.Option("--depth", "-d", min=1, max=40, help="Stockfish search depth.")
+]
+
+
+@app.command()
+def analyse(username: UsernameArg = None, games: GamesOpt = None, depth: DepthOpt = None) -> None:
+    """Analyse your newest games with Stockfish. Games already analysed are skipped."""
+    settings = _with_depth(Settings(), depth)
+    _analyse(settings, _username(settings, username), games)
+
+
 @app.command()
 def build() -> None:
     """Build and test the gold tables with dbt."""
@@ -83,11 +96,37 @@ def build() -> None:
 
 
 @app.command()
-def run(username: UsernameArg = None, games: GamesOpt = None) -> None:
-    """Do everything: fetch, check, split into moves, and build the gold tables."""
-    settings = Settings()
-    _fetch(settings, _username(settings, username), games)
+def run(username: UsernameArg = None, games: GamesOpt = None, depth: DepthOpt = None) -> None:
+    """Do everything: fetch, check, split into moves, analyse, and build the gold tables."""
+    settings = _with_depth(Settings(), depth)
+    name = _username(settings, username)
+    _fetch(settings, name, games)
+    _analyse(settings, name, games)
     _build(settings)
+
+
+def _with_depth(settings: Settings, depth: int | None) -> Settings:
+    return settings.model_copy(update={"engine_depth": depth}) if depth else settings
+
+
+def _analyse(settings: Settings, name: str, games: int | None) -> None:
+    limit = games or settings.max_games
+    typer.echo(f"Analysing your newest {limit} games at depth {settings.engine_depth}...")
+    with typer.progressbar(length=limit, label="Games") as bar:
+        last = 0
+
+        def progress(done: int, total: int) -> None:
+            nonlocal last
+            bar.length = total
+            bar.update(done - last)
+            last = done
+
+        try:
+            summary = pipeline.analyse(settings, name, max_games=games, progress=progress)
+        except EngineError as exc:
+            typer.echo(f"\nError: {exc}")
+            raise typer.Exit(code=1) from exc
+    typer.echo(f"Analysed {summary.analysed} games ({summary.already_done} were already done)")
 
 
 @app.command()

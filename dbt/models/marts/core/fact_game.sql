@@ -24,9 +24,20 @@ select
     g.player_accuracy,
     g.opponent_accuracy,
     g.url,
+    a.game_uuid is not null as is_analysed,
+    a.engine_depth,
+    a.engine_accuracy,
+    a.opponent_engine_accuracy,
+    s.blunders,
+    s.mistakes,
+    s.inaccuracies,
+    s.peak_win_chance,
+    coalesce(s.peak_win_chance >= 75 and g.outcome != 'win', false) as failed_to_convert,
     -- 1 = the player's newest game. Lets the app pick "the last N games".
     row_number() over (partition by g.username order by g.end_time desc, g.game_uuid) as recency_rank
 from {{ ref('stg_games') }} as g
+left join {{ ref('stg_game_analysis') }} as a using (username, game_uuid)
+left join {{ ref('int_game_eval_stats') }} as s using (username, game_uuid)
 left join {{ ref('dim_player') }} as p
     on p.username = g.username
     and p.time_class = g.time_class

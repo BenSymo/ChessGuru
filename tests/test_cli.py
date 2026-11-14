@@ -18,6 +18,7 @@ def test_version() -> None:
 
 def test_doctor_fails_without_stockfish(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr("shutil.which", lambda name: None)
+    monkeypatch.setattr("chessguru.config.STOCKFISH_LOCATIONS", ())
 
     result = runner.invoke(app, ["doctor"])
 

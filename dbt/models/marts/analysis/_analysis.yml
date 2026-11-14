@@ -12,3 +12,21 @@ models:
     description: Time spent per move, by move range.
   - name: mart_game_endings
     description: Count of games by outcome and how they ended.
+  - name: mart_phase_accuracy
+    description: Accuracy and bad moves per phase (opening, middlegame, endgame).
+    columns:
+      - name: phase
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [opening, middlegame, endgame]
+  - name: mart_mistake_patterns
+    description: Why bad moves went wrong (hanging piece, missed fork, low clock, ...).
+    columns:
+      - name: tag
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [missed_mate, allowed_mate, hanging_piece, missed_fork, missed_pin,
+                         missed_skewer, missed_punish, low_clock, other]

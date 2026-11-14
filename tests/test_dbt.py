@@ -16,7 +16,8 @@ from chessguru.api.contracts import Game
 from chessguru.cli import app
 from chessguru.config import Settings
 from chessguru.transform.dbt import DEFAULT_PROJECT_DIR, DbtError, run_dbt
-from tests.factories import make_game
+from tests.factories import SCHOLARS_MATE, make_game
+from tests.fake_engine import FakeEvaluator
 
 NOW = datetime(2026, 11, 14, tzinfo=UTC)
 OPP_WIN = {"username": "rival", "rating": 1300, "result": "win"}
@@ -32,6 +33,8 @@ def sample_games() -> list[Game]:
             white=OPP_WIN,
             black={"username": "TestPlayer", "rating": 1215, "result": "timeout"},
             eco="https://www.chess.com/openings/Sicilian-Defense-Najdorf-Variation-6.Be3",
+            # Black is down to 30 seconds of 10 minutes (5%) when playing 3...Nf6??
+            pgn=SCHOLARS_MATE.replace("9:40", "0:30"),
         ),
         make_game(
             4,
@@ -51,6 +54,8 @@ def sample_games() -> list[Game]:
 def built(tmp_path_factory: pytest.TempPathFactory) -> Settings:
     settings = Settings(data_dir=tmp_path_factory.mktemp("data"), hash_key="test-key")
     pipeline.parse(settings, "testplayer", sample_games(), now=NOW)
+    # Analyse 4 of the 5 games, so gold has both analysed and unanalysed games.
+    pipeline.analyse(settings, "testplayer", max_games=4, make_evaluator=FakeEvaluator)
     result = pipeline.build(settings, "testplayer")
     assert result.failures == []
     assert result.passed > 40
@@ -187,3 +192,45 @@ def test_cli_build_and_docs(built: Settings, monkeypatch: pytest.MonkeyPatch) ->
     assert docs.exit_code == 0, docs.stdout
     assert (built.dbt_target_dir / "index.html").exists()
     assert (built.dbt_target_dir / "catalog.json").exists()
+
+
+def test_analysis_reaches_gold(built: Settings) -> None:
+    rows = query(
+        built,
+        "select game_uuid, is_analysed, blunders, failed_to_convert "
+        "from gold.fact_game order by game_uuid",
+    )
+
+    # uuid-1 is the oldest game, so it is the one left unanalysed.
+    assert [r[:2] for r in rows] == [
+        ("uuid-1", False),
+        ("uuid-2", True),
+        ("uuid-3", True),
+        ("uuid-4", True),
+        ("uuid-5", True),
+    ]
+    assert rows[0][2] is None
+    # In uuid-3 the player is Black and walks into Scholar's mate.
+    assert isinstance(rows[2][2], int) and rows[2][2] >= 1
+
+
+def test_mistake_patterns(built: Settings) -> None:
+    rows = query(
+        built,
+        "select tag, phase, moves from gold.mart_mistake_patterns where tag = 'allowed_mate'",
+    )
+
+    assert rows == [("allowed_mate", "opening", 1)]
+    low_clock = query(built, "select moves from gold.mart_mistake_patterns where tag = 'low_clock'")
+    assert low_clock == [(1,)]
+
+
+def test_phase_accuracy(built: Settings) -> None:
+    rows = query(
+        built,
+        "select phase, sum(games), sum(moves), sum(blunders) "
+        "from gold.mart_phase_accuracy group by 1",
+    )
+
+    # 4 analysed games, all short enough to stay in the opening; 15 of the moves are ours.
+    assert rows == [("opening", 4, 15, 1)]

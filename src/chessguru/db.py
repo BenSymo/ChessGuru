@@ -89,6 +89,39 @@ CREATE TABLE IF NOT EXISTS silver_moves (
     time_spent_seconds  DOUBLE,
     PRIMARY KEY (username, game_uuid, ply)
 );
+
+-- Silver: Stockfish's verdict on every move, from the mover's point of view.
+CREATE TABLE IF NOT EXISTS silver_move_evals (
+    username       VARCHAR NOT NULL,
+    game_uuid      VARCHAR NOT NULL,
+    ply            INTEGER NOT NULL,
+    phase          VARCHAR NOT NULL,
+    cp_before      INTEGER NOT NULL,
+    cp_after       INTEGER NOT NULL,
+    mate_before    INTEGER,
+    mate_after     INTEGER,
+    win_before     DOUBLE NOT NULL,
+    win_after      DOUBLE NOT NULL,
+    win_drop       DOUBLE NOT NULL,
+    cp_loss        INTEGER NOT NULL,
+    accuracy       DOUBLE NOT NULL,
+    label          VARCHAR NOT NULL,
+    best_move_uci  VARCHAR,
+    best_move_san  VARCHAR,
+    tags           VARCHAR[] NOT NULL,
+    PRIMARY KEY (username, game_uuid, ply)
+);
+
+-- Silver: which games have been analysed, how deeply, and the engine accuracy.
+CREATE TABLE IF NOT EXISTS silver_game_analysis (
+    username           VARCHAR NOT NULL,
+    game_uuid          VARCHAR NOT NULL,
+    engine_depth       INTEGER NOT NULL,
+    player_accuracy    DOUBLE,
+    opponent_accuracy  DOUBLE,
+    analysed_at        TIMESTAMPTZ NOT NULL,
+    PRIMARY KEY (username, game_uuid)
+);
 """
 
 
@@ -108,8 +141,8 @@ def _migrate(conn: duckdb.DuckDBPyConnection) -> None:
         return
     if current is not None or _table_exists(conn, "silver_games"):
         # Older silver tables: drop them; the next parse rebuilds them from bronze.
-        conn.execute("DROP TABLE IF EXISTS silver_moves")
-        conn.execute("DROP TABLE IF EXISTS silver_games")
+        for table in ("silver_game_analysis", "silver_move_evals", "silver_moves", "silver_games"):
+            conn.execute(f"DROP TABLE IF EXISTS {table}")
     conn.execute("DELETE FROM schema_version")
     conn.execute("INSERT INTO schema_version VALUES (?)", [SCHEMA_VERSION])
 

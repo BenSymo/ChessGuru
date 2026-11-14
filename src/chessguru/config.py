@@ -14,6 +14,12 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from chessguru import __version__
 
+STOCKFISH_LOCATIONS = (
+    Path("/usr/games/stockfish"),  # Debian / Ubuntu
+    Path("/opt/homebrew/bin/stockfish"),  # macOS (Apple silicon)
+    Path("/usr/local/bin/stockfish"),  # macOS (Intel), manual installs
+)
+
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
@@ -70,4 +76,7 @@ class Settings(BaseSettings):
         if self.stockfish_path:
             return self.stockfish_path if self.stockfish_path.exists() else None
         found = shutil.which("stockfish")
-        return Path(found) if found else None
+        if found:
+            return Path(found)
+        # Common install folders that are not always on the PATH.
+        return next((path for path in STOCKFISH_LOCATIONS if path.exists()), None)

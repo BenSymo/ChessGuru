@@ -40,6 +40,10 @@ models:
                 quote: false
       - name: recency_rank
         data_tests: [not_null]
+      - name: failed_to_convert
+        description: The player reached a 75%+ chance to win (about +3) but did not win.
+      - name: is_analysed
+        description: Stockfish has analysed this game.
 
   - name: fact_move
     description: "Grain: one row per move (ply), both sides of the board."
