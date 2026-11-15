@@ -23,13 +23,13 @@ NOW = datetime(2026, 11, 14, tzinfo=UTC)
 
 @pytest.fixture(scope="module")
 def built(tmp_path_factory: pytest.TempPathFactory) -> Settings:
-    settings = Settings(data_dir=tmp_path_factory.mktemp("data"), hash_key="test-key")
+    settings = Settings(data_dir=tmp_path_factory.mktemp("data"))
     pipeline.parse(settings, "testplayer", sample_games(), now=NOW)
     # Analyse 4 of the 5 games, so gold has both analysed and unanalysed games.
     pipeline.analyse(settings, "testplayer", max_games=4, make_evaluator=FakeEvaluator)
     result = pipeline.build(settings, "testplayer")
     assert result.failures == []
-    assert result.passed > 40
+    assert result.passed > 20
     return settings
 
 
@@ -43,16 +43,16 @@ def query(
 def test_fact_game(built: Settings) -> None:
     rows = query(
         built,
-        "select game_uuid, outcome, score, player_colour, recency_rank "
+        "select game_uuid, outcome, score, player_colour, player_rating "
         "from gold.fact_game order by game_uuid",
     )
 
     assert rows == [
-        ("uuid-1", "win", 1.0, "white", 5),
-        ("uuid-2", "win", 1.0, "white", 4),
-        ("uuid-3", "loss", 0.0, "black", 3),
-        ("uuid-4", "draw", 0.5, "white", 2),
-        ("uuid-5", "win", 1.0, "white", 1),
+        ("uuid-1", "win", 1.0, "white", 1200),
+        ("uuid-2", "win", 1.0, "white", 1208),
+        ("uuid-3", "loss", 0.0, "black", 1215),
+        ("uuid-4", "draw", 0.5, "white", 900),
+        ("uuid-5", "win", 1.0, "white", 1200),
     ]
 
 
@@ -62,43 +62,18 @@ def test_fact_move_grain(built: Settings) -> None:
     ]
 
 
-def test_dim_player_keeps_rating_history(built: Settings) -> None:
-    rows = query(
-        built,
-        "select time_class, rating, is_current from gold.dim_player "
-        "order by time_class, valid_from",
-    )
+def test_no_opponent_names_in_the_database(built: Settings) -> None:
+    with duckdb.connect(str(built.db_path), read_only=True) as conn:
+        tables = [
+            r[0]
+            for r in conn.execute(
+                "select table_schema || '.' || table_name from information_schema.tables"
+            ).fetchall()
+        ]
+        text = " ".join(str(conn.execute(f"select * from {t}").fetchall()) for t in tables)
 
-    assert rows == [
-        ("blitz", 900, True),
-        ("rapid", 1200, False),
-        ("rapid", 1208, False),
-        ("rapid", 1215, False),
-        ("rapid", 1200, True),
-    ]
-
-
-def test_fact_game_uses_the_rating_row_valid_at_the_time(built: Settings) -> None:
-    rows = query(
-        built,
-        "select f.game_uuid, p.rating from gold.fact_game f "
-        "join gold.dim_player p using (player_key) order by f.game_uuid",
-    )
-
-    assert rows == [
-        ("uuid-1", 1200),
-        ("uuid-2", 1208),
-        ("uuid-3", 1215),
-        ("uuid-4", 900),
-        ("uuid-5", 1200),
-    ]
-
-
-def test_opponents_are_hashed(built: Settings) -> None:
-    keys = [r[0] for r in query(built, "select opponent_key from gold.dim_opponent")]
-
-    assert len(keys) == 4  # opponent1, opponent2, rival (twice), opponent5
-    assert not any("rival" in str(k) or "opponent" in str(k) for k in keys)
+    for name in ("opponent1", "opponent2", "rival", "opponent5"):
+        assert name not in text
 
 
 def test_time_control_labels(built: Settings) -> None:
@@ -154,18 +129,13 @@ def test_missing_project(built: Settings, tmp_path: Path) -> None:
         run_dbt(built, "build", project_dir=tmp_path)
 
 
-def test_cli_build_and_docs(built: Settings, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_cli_build(built: Settings, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("CHESSGURU_DATA_DIR", str(built.data_dir))
-    runner = CliRunner()
 
-    build = runner.invoke(app, ["build"])
-    docs = runner.invoke(app, ["docs"])
+    build = CliRunner().invoke(app, ["build"])
 
     assert build.exit_code == 0, build.stdout
     assert "models and tests passed" in build.stdout
-    assert docs.exit_code == 0, docs.stdout
-    assert (built.dbt_target_dir / "index.html").exists()
-    assert (built.dbt_target_dir / "catalog.json").exists()
 
 
 def test_analysis_reaches_gold(built: Settings) -> None:

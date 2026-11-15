@@ -56,14 +56,6 @@ def test_max_games_must_be_positive(bad: int) -> None:
         Settings(max_games=bad)
 
 
-def test_hash_key_is_hidden_when_printed() -> None:
-    settings = Settings(hash_key="super-secret")
-
-    assert "super-secret" not in repr(settings)
-    assert settings.hash_key is not None
-    assert settings.hash_key.get_secret_value() == "super-secret"
-
-
 def test_resolve_stockfish_uses_configured_path(tmp_path: Path) -> None:
     binary = tmp_path / "stockfish"
     binary.write_text("")

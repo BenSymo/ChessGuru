@@ -16,7 +16,7 @@ from chessguru.quality.checks import Rejected
 
 # Bump this when the silver tables change shape. Silver can always be rebuilt
 # from bronze, so an older version just drops silver and parses again.
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 SCHEMA = """
 -- Games set aside by the checks (step 'check') or the parser (step 'parse').
@@ -53,19 +53,13 @@ CREATE TABLE IF NOT EXISTS silver_games (
     rated              BOOLEAN NOT NULL,
     player_colour      VARCHAR NOT NULL,
     player_rating      INTEGER NOT NULL,
-    opponent_username  VARCHAR NOT NULL,
-    opponent_key       VARCHAR NOT NULL,
-    opponent_rating    INTEGER NOT NULL,
     player_result      VARCHAR NOT NULL,
     outcome            VARCHAR NOT NULL,
     end_reason         VARCHAR NOT NULL,
     eco_code           VARCHAR,
     opening_name       VARCHAR,
     opening_family     VARCHAR,
-    player_accuracy    DOUBLE,
-    opponent_accuracy  DOUBLE,
     plies              INTEGER NOT NULL,
-    pgn                VARCHAR NOT NULL,
     parsed_at          TIMESTAMPTZ NOT NULL,
     PRIMARY KEY (username, game_uuid)
 );
@@ -81,10 +75,6 @@ CREATE TABLE IF NOT EXISTS silver_moves (
     san                 VARCHAR NOT NULL,
     uci                 VARCHAR NOT NULL,
     piece               VARCHAR NOT NULL,
-    is_capture          BOOLEAN NOT NULL,
-    is_check            BOOLEAN NOT NULL,
-    is_castle           BOOLEAN NOT NULL,
-    is_promotion        BOOLEAN NOT NULL,
     fen_before          VARCHAR NOT NULL,
     clock_seconds       DOUBLE,
     time_spent_seconds  DOUBLE,
@@ -113,13 +103,12 @@ CREATE TABLE IF NOT EXISTS silver_move_evals (
     PRIMARY KEY (username, game_uuid, ply)
 );
 
--- Silver: which games have been analysed, how deeply, and the engine accuracy.
+-- Silver: which games have been analysed, how deeply, and the player's accuracy.
 CREATE TABLE IF NOT EXISTS silver_game_analysis (
     username           VARCHAR NOT NULL,
     game_uuid          VARCHAR NOT NULL,
     engine_depth       INTEGER NOT NULL,
     player_accuracy    DOUBLE,
-    opponent_accuracy  DOUBLE,
     analysed_at        TIMESTAMPTZ NOT NULL,
     PRIMARY KEY (username, game_uuid)
 );

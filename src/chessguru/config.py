@@ -9,7 +9,7 @@ from __future__ import annotations
 import shutil
 from pathlib import Path
 
-from pydantic import Field, SecretStr, field_validator
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from chessguru import __version__
@@ -47,10 +47,9 @@ class Settings(BaseSettings):
     stockfish_path: Path | None = None
     engine_depth: int = Field(default=14, ge=1, le=40)
     max_games: int = Field(default=30, ge=1)
-    hash_key: SecretStr | None = None
     dbt_project_dir: Path | None = None
 
-    @field_validator("username", "contact", "stockfish_path", "hash_key", mode="before")
+    @field_validator("username", "contact", "stockfish_path", mode="before")
     @classmethod
     def _blank_is_none(cls, value: object) -> object:
         """Treat empty values from .env (e.g. `CHESSGURU_CONTACT=`) as unset."""
@@ -80,7 +79,7 @@ class Settings(BaseSettings):
 
     @property
     def dbt_target_dir(self) -> Path:
-        """Where dbt puts compiled SQL and the docs site."""
+        """Where dbt puts its compiled SQL and run results."""
         return self.data_dir / "dbt_target"
 
     def resolve_stockfish(self) -> Path | None:

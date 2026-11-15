@@ -14,11 +14,6 @@ from chessguru.parse.games import (
 )
 from tests.factories import make_game
 
-
-def fake_hash(name: str) -> str:
-    return f"hash-{name.lower()}"
-
-
 BLACK_SIDE = {"username": "TestPlayer", "rating": 1190, "result": "checkmated"}
 
 
@@ -77,18 +72,15 @@ def test_opening_from_url(url: str | None, name: str | None, family: str | None)
 
 
 def test_game_row_from_whites_side() -> None:
-    row = parse_game(game(), "testplayer", fake_hash).game
+    row = parse_game(game(), "testplayer").game
 
     assert row.player_colour == "white"
     assert row.player_rating == 1200
-    assert row.opponent_username == "opponent1"
-    assert row.opponent_key == "hash-opponent1"
+    assert "opponent1" not in str(row)  # the opponent's name isn't kept
     assert row.outcome == "win"
     assert row.end_reason == "checkmated"
     assert row.plies == 7
     assert row.base_seconds == 600
-    assert row.player_accuracy == 92.1
-    assert row.opponent_accuracy == 40.3
     assert row.opening_name == "Bishops Opening"
     assert row.end_time == datetime.fromtimestamp(1793001000, UTC)
 
@@ -97,28 +89,26 @@ def test_game_row_from_blacks_side() -> None:
     row = parse_game(
         game(white={"username": "opp", "rating": 1250, "result": "win"}, black=BLACK_SIDE),
         "testplayer",
-        fake_hash,
     ).game
 
     assert row.player_colour == "black"
     assert row.outcome == "loss"
     assert row.end_reason == "checkmated"
-    assert row.player_accuracy == 40.3
 
 
 def test_moves() -> None:
-    moves = parse_game(game(), "testplayer", fake_hash).moves
+    moves = parse_game(game(), "testplayer").moves
 
     assert [m.san for m in moves] == ["e4", "e5", "Bc4", "Nc6", "Qh5", "Nf6", "Qxf7#"]
     assert [m.is_player_move for m in moves] == [True, False] * 3 + [True]
     assert [m.move_number for m in moves] == [1, 1, 2, 2, 3, 3, 4]
     last = moves[-1]
-    assert (last.piece, last.uci, last.is_capture, last.is_check) == ("Q", "h5f7", True, True)
+    assert (last.piece, last.uci, last.san) == ("Q", "h5f7", "Qxf7#")
     assert moves[0].fen_before.startswith("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w")
 
 
 def test_clock_and_time_spent() -> None:
-    moves = parse_game(game(), "testplayer", fake_hash).moves
+    moves = parse_game(game(), "testplayer").moves
 
     # Clocks in the PGN: White 598, 595, 590, 585; Black 597, 590, 580 (600s, no increment).
     assert [m.clock_seconds for m in moves] == [598, 597, 595, 590, 590, 580, 585]
@@ -126,26 +116,24 @@ def test_clock_and_time_spent() -> None:
 
 
 def test_time_spent_includes_increment() -> None:
-    moves = parse_game(game(time_control="600+5"), "testplayer", fake_hash).moves
+    moves = parse_game(game(time_control="600+5"), "testplayer").moves
 
     assert moves[0].time_spent_seconds == 7  # 600 + 5 - 598
     assert moves[2].time_spent_seconds == 8  # 598 + 5 - 595
 
 
 def test_daily_games_have_no_time_spent() -> None:
-    moves = parse_game(
-        game(time_class="daily", time_control="1/86400"), "testplayer", fake_hash
-    ).moves
+    moves = parse_game(game(time_class="daily", time_control="1/86400"), "testplayer").moves
 
     assert all(m.time_spent_seconds is None for m in moves)
 
 
-def test_castling_and_promotion_flags() -> None:
+def test_castling_and_missing_clocks() -> None:
     pgn = '[Result "*"]\n\n1. e4 e5 2. Nf3 Nc6 3. Bc4 Bc5 4. O-O Nf6 *'
-    moves = parse_game(game(pgn=pgn), "testplayer", fake_hash).moves
+    moves = parse_game(game(pgn=pgn), "testplayer").moves
 
     assert moves[6].san == "O-O"
-    assert moves[6].is_castle
+    assert moves[6].piece == "K"
     assert moves[6].clock_seconds is None
     assert moves[6].time_spent_seconds is None
 
@@ -159,9 +147,9 @@ def test_castling_and_promotion_flags() -> None:
 )
 def test_unusable_pgn(pgn: str, message: str) -> None:
     with pytest.raises(ParseError, match=message):
-        parse_game(game(pgn=pgn), "testplayer", fake_hash)
+        parse_game(game(pgn=pgn), "testplayer")
 
 
 def test_player_must_be_in_game() -> None:
     with pytest.raises(ParseError, match="did not play"):
-        parse_game(game(), "someone-else", fake_hash)
+        parse_game(game(), "someone-else")

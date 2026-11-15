@@ -13,7 +13,7 @@ from chessguru.analysis.engine import EngineError
 from chessguru.api.client import ChessComError
 from chessguru.config import Settings
 from chessguru.quality.checks import DataContractError
-from chessguru.transform.dbt import DbtError, run_dbt
+from chessguru.transform.dbt import DbtError
 
 app = typer.Typer(
     help="See where you're going wrong at chess and what to fix first.",
@@ -44,7 +44,6 @@ def doctor() -> None:
         ("Stockfish", _stockfish_status(stockfish)),
         ("Engine depth", str(settings.engine_depth)),
         ("Games to analyse", str(settings.max_games)),
-        ("Hash key", "set" if settings.hash_key else "not set"),
     ]
     width = max(len(label) for label, _ in rows)
     for label, value in rows:
@@ -215,23 +214,6 @@ def _run_streamlit(args: list[str]) -> None:
 
     sys.argv = args
     streamlit_cli.main()
-
-
-@app.command()
-def docs() -> None:
-    """Generate the dbt docs site (models, tests and lineage)."""
-    settings = Settings()
-    try:
-        run_dbt(settings, "docs generate")
-    except DbtError as exc:
-        typer.echo(f"Error: {exc}")
-        raise typer.Exit(code=1) from exc
-    target = settings.dbt_target_dir.resolve()
-    typer.echo(f"Docs written to {target / 'index.html'}")
-    typer.echo(
-        "To browse them: uv run dbt docs serve --project-dir dbt --profiles-dir dbt "
-        f"--target-path {target}"
-    )
 
 
 def _build(settings: Settings) -> None:

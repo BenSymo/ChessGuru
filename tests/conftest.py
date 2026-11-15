@@ -32,9 +32,7 @@ def gold_settings(tmp_path_factory: pytest.TempPathFactory) -> Settings:
     from tests.factories import sample_games
     from tests.fake_engine import FakeEvaluator
 
-    settings = Settings(
-        data_dir=tmp_path_factory.mktemp("gold"), hash_key="test-key", username="testplayer"
-    )
+    settings = Settings(data_dir=tmp_path_factory.mktemp("gold"), username="testplayer")
     now = datetime(2026, 11, 14, tzinfo=UTC)
     pipeline.parse(settings, "testplayer", sample_games(), now=now)
     pipeline.analyse(settings, "testplayer", max_games=4, make_evaluator=FakeEvaluator)

@@ -84,7 +84,6 @@ In the Windows app, use `ChessGuru.exe <command>` instead of `uv run chessguru <
 | `uv run chessguru fetch <you>` | Just download and check games |
 | `uv run chessguru analyse <you> --depth 18` | Just the Stockfish step (deeper = slower, more accurate) |
 | `uv run chessguru build` | Just rebuild the tables the dashboard reads (with dbt) |
-| `uv run chessguru docs` | Generate the dbt docs site (models, tests, lineage) |
 | `uv run chessguru doctor` | Check settings and that Stockfish works |
 
 Analysis is saved, so asking for more games only analyses the extra ones. Games are only analysed again if you ask for a greater depth.
@@ -102,12 +101,11 @@ Put these in `.env` (copy [`.env.example`](.env.example)). In the Windows app, p
 | `CHESSGURU_ENGINE_DEPTH` | `14` | Stockfish search depth |
 | `CHESSGURU_DATA_DIR` | `./data` | Where games and the database are stored |
 | `CHESSGURU_STOCKFISH_PATH` | found automatically | Path to Stockfish, if it isn't found |
-| `CHESSGURU_HASH_KEY` | generated | Secret key used to hash opponents' usernames |
 
 ## Privacy
 
 - **Local only:** your games and results stay on your computer. The only site contacted is `api.chess.com`.
-- **Opponents' names:** they are hashed (HMAC-SHA256) before they reach the tables the dashboard reads.
+- **Opponents' names:** not stored. Only the raw files downloaded from chess.com contain them, exactly as chess.com sent them.
 - **Kept out of git:** the data folder and `.env` are never committed.
 
 ## Docker
@@ -140,18 +138,13 @@ git tag v0.1.0
 git push origin v0.1.0
 ```
 
-**Data engineering practices used:**
-- bronze / silver / gold layers
-- a pydantic data contract with quality checks and quarantine
-- a dbt star schema with a Type 2 dimension and tests
-- hashed personal data and a pipeline run log
-- CI with Docker
+**How the data is handled:**
+- raw files, then cleaned tables, then the tables the dashboard reads (bronze / silver / gold)
+- a data contract and quality checks; bad games are set aside, not silently dropped
+- dbt builds the dashboard's tables and tests them on every run
+- a log of every pipeline run
 
-See [How ChessGuru works](docs/HOW_IT_WORKS.md).
-
-**Planned next:**
-- an Airflow job to run the pipeline daily, with Docker Compose
-- a rule for how long raw files are kept
+See [How ChessGuru works](docs/HOW_IT_WORKS.md) for the details.
 
 ## Licence notes
 

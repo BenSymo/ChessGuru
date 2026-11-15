@@ -120,7 +120,7 @@ def test_rewriting_a_game_replaces_it(settings: Settings) -> None:
     from chessguru.parse.silver import write_games
 
     conn = connect(settings.db_path)
-    parsed = parse_game(Game.model_validate(make_game(1)), "testplayer", str.upper)
+    parsed = parse_game(Game.model_validate(make_game(1)), "testplayer")
 
     write_games(conn, [parsed], NOW)
     write_games(conn, [parsed], NOW)

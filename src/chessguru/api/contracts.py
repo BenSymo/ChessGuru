@@ -25,11 +25,6 @@ class Side(_Contract):
     result: str = Field(min_length=1)
 
 
-class Accuracies(_Contract):
-    white: float = Field(ge=0, le=100)
-    black: float = Field(ge=0, le=100)
-
-
 class Game(_Contract):
     url: str = Field(pattern=r"^https://www\.chess\.com/game/")
     uuid: str = Field(min_length=1)
@@ -42,7 +37,6 @@ class Game(_Contract):
     initial_setup: str = STANDARD_START
     white: Side
     black: Side
-    accuracies: Accuracies | None = None
     eco: str | None = None
 
     def colour_of(self, username: str) -> Literal["white", "black"] | None:

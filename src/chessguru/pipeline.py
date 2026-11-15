@@ -1,4 +1,4 @@
-"""Pipeline steps. The CLI (and later Airflow) call these same functions."""
+"""Pipeline steps. The command line and the dashboard both call these same functions."""
 
 from __future__ import annotations
 
@@ -12,7 +12,6 @@ from chessguru.api.client import ChessComClient
 from chessguru.api.contracts import Game
 from chessguru.config import Settings
 from chessguru.db import connect, logged_run, replace_quarantine
-from chessguru.governance.hashing import load_key, make_hasher
 from chessguru.ingest.bronze import BronzeStore
 from chessguru.ingest.fetch import FetchSummary, fetch_recent_games
 from chessguru.parse.games import ParsedGame, ParseError, parse_game
@@ -82,7 +81,6 @@ def parse(
     now = now or datetime.now(UTC)
     name = username.lower()
     summary = ParseSummary()
-    hash_name = make_hasher(load_key(settings))
     conn = connect(settings.db_path)
     try:
         with logged_run(conn, "parse", name) as details:
@@ -93,7 +91,7 @@ def parse(
                     summary.already_stored += 1
                     continue
                 try:
-                    parsed.append(parse_game(game, name, hash_name))
+                    parsed.append(parse_game(game, name))
                 except ParseError as exc:
                     summary.rejected.append(Rejected("silver", str(exc), game.url))
             write_games(conn, parsed, now)

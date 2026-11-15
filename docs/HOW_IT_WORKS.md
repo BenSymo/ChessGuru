@@ -14,15 +14,15 @@ chess.com API
     ▼
 BRONZE  data/bronze/<user>/<YYYY-MM>.json      raw files, exactly as sent
     │  check      quality/     data contract + checks; bad games → quarantine table
-    │  parse      parse/       PGN → one row per game and per move; opponent name hashed
+    │  parse      parse/       PGN → one row per game and per move
     ▼
 SILVER  silver_games, silver_moves             (DuckDB: data/chessguru.duckdb)
     │  analyse    analysis/    Stockfish scores every position; label + tag every move
     ▼
 SILVER  silver_move_evals, silver_game_analysis
-    │  build      transform/ + dbt/   staging → intermediate → star schema, with tests
+    │  build      transform/ + dbt/   staging → intermediate → gold, with tests
     ▼
-GOLD    fact_game, fact_move, dim_*
+GOLD    fact_game, fact_move, dim_time_control, dim_opening
     │             app/data.py   read-only queries
     ▼
 DASHBOARD (Streamlit)  app/          filters, charts, tips (insights/tips.py)
@@ -38,7 +38,7 @@ Each step writes a row to the `pipeline_runs` table, saying whether it worked an
 
 | Path | What's there |
 |---|---|
-| `src/chessguru/cli.py` | The `chessguru` command (Typer): `run`, `fetch`, `analyse`, `build`, `tips`, `dashboard`, `doctor`, `docs`, `version` |
+| `src/chessguru/cli.py` | The `chessguru` command (Typer): `run`, `fetch`, `analyse`, `build`, `tips`, `dashboard`, `doctor`, `version` |
 | `src/chessguru/config.py` | Settings (`CHESSGURU_*` environment variables or `.env`; listed in the README). Finds Stockfish: the configured path, then the bundled copy (Windows app), then `stockfish` on PATH, then common install folders |
 | `src/chessguru/pipeline.py` | The pipeline steps, each logged to `pipeline_runs` |
 | `src/chessguru/db.py` | DuckDB connection, silver table definitions, schema version, run log |
@@ -46,7 +46,6 @@ Each step writes a row to the `pipeline_runs` table, saying whether it worked an
 | `src/chessguru/ingest/` | Bronze file store and the "which months to download" logic |
 | `src/chessguru/quality/` | Data quality checks |
 | `src/chessguru/parse/` | PGN → silver rows (`games.py`), and writing them (`silver.py`) |
-| `src/chessguru/governance/` | Hashing opponent usernames |
 | `src/chessguru/analysis/` | Stockfish (`engine.py`), scoring maths (`scoring.py`), game phases, tactic tags, per-game analysis, and running it in parallel (`store.py`) |
 | `src/chessguru/transform/` | Runs dbt |
 | `src/chessguru/insights/tips.py` | The tip rules |
@@ -97,11 +96,9 @@ Each step writes a row to the `pipeline_runs` table, saying whether it worked an
   - result and outcome (`win` / `draw` / `loss`), and the end reason (from the loser's code, e.g. `resigned`, `timeout`)
   - time control, split into base and increment seconds
   - the opening name and family, read from chess.com's opening URL
-  - the PGN
 - **one `silver_moves` row per ply** (half-move). It holds:
   - SAN and UCI
   - the piece moved
-  - capture / check / castle / promotion flags
   - the position before the move (FEN)
   - the clock after the move, and the time spent (`previous clock + increment − clock`)
   - daily games have no clock data
@@ -109,11 +106,11 @@ Each step writes a row to the `pipeline_runs` table, saying whether it worked an
 Games already in silver are skipped. If the PGN can't be read, the game is quarantined
 (step `parse`).
 
-**Opponent names:** the raw opponent username is kept only in silver. A 16-character HMAC-SHA256 hash
-(`opponent_key`) is what goes further (see Privacy).
+**Opponents:** nothing about the opponent is stored except the game's result, so no one
+else's personal data is kept (see Privacy).
 
 **Schema changes:** if the silver tables change shape, bump `SCHEMA_VERSION` in `db.py`. On the next run,
-older silver tables are dropped and rebuilt from bronze, which is always kept.
+older silver tables are dropped and rebuilt from bronze, which is always kept. Stockfish analysis is part of silver, so games are analysed again.
 
 ### 4. Analyse (Stockfish)
 
@@ -146,7 +143,7 @@ older silver tables are dropped and rebuilt from bronze, which is always kept.
   | `missed_punish` | The opponent's previous move was a mistake or blunder, and you didn't take advantage |
   | `low_clock` | A mistake or blunder made with under 10% of your starting time left. Added later, in dbt |
 
-- **Results:** stored in `silver_move_evals` (one row per move, both sides) and `silver_game_analysis` (depth and accuracy per game).
+- **Results:** stored in `silver_move_evals` (one row per move, both sides) and `silver_game_analysis` (depth and your accuracy per game).
 
 ### 5. Build (gold, with dbt)
 
@@ -155,33 +152,30 @@ older silver tables are dropped and rebuilt from bronze, which is always kept.
 **How dbt is run:**
 - **Separate process:** dbt runs in a process of its own because DuckDB allows only one writer, and dbt keeps its connection open until its process ends.
 - **Database path:** passed in as `CHESSGURU_DB_PATH`.
-- **Output:** dbt's own files (compiled SQL, logs, docs) go in the data folder.
+- **Output:** dbt's own files (compiled SQL, logs) go in the data folder.
 - **Results:** the outcome is read from `run_results.json`.
 
 | Layer | Models | Notes |
 |---|---|---|
-| staging (views) | `stg_games`, `stg_moves`, `stg_move_evals`, `stg_game_analysis` | Clean names and types. Adds `score` (1 / ½ / 0). The raw opponent name is dropped here |
-| intermediate (views) | `int_player_move_evals`, `int_game_eval_stats`, `int_rating_changes` | Player's own moves plus `low_clock`. Per-game bad-move counts and peak win chance. Rating change points |
-| gold (tables) | `fact_game`, `fact_move`, `dim_date`, `dim_time_control`, `dim_opening`, `dim_opponent`, `dim_player` | Star schema. The dashboard reads the facts plus `dim_date`, `dim_time_control` and `dim_opening` |
+| staging (views) | `stg_games`, `stg_moves`, `stg_move_evals`, `stg_game_analysis` | Picks the columns the app needs, with clean names. Adds `score` (1 / ½ / 0) and the game's date |
+| intermediate (views) | `int_player_move_evals`, `int_game_eval_stats` | The player's own moves, plus the `low_clock` tag. Per-game bad-move counts and peak win chance |
+| gold (tables) | `fact_game`, `fact_move`, `dim_time_control`, `dim_opening` | Exactly what the dashboard reads. See below |
 
-**The star schema:**
+**The gold tables:**
 - **`fact_game`:** one row per game.
-  - Keys to each dimension.
-  - Outcome, score and ratings.
+  - Date, time class, colour, rated, outcome, score, how it ended, your rating.
+  - Keys to `dim_time_control` and `dim_opening`.
   - Analysis results: `is_analysed`, `engine_accuracy`, blunders / mistakes / inaccuracies, `peak_win_chance`.
   - `failed_to_convert`: reached 75%+ win chance and didn't win.
-  - `recency_rank`: 1 = newest.
-- **`fact_move`:** one row per ply. Both sides are included; `is_player_move` marks yours.
-- **`dim_player`:** a Type 2 slowly changing dimension. There's a new row each time your rating changes in a time class, with `valid_from` and `valid_to`, so rating history is kept.
-- **`dim_opponent`:** opponents are known only by their hash key.
+- **`fact_move`:** one row per ply. Both sides are included; `is_player_move` marks yours. Holds the position, clock, and Stockfish's verdict, best move and tags.
+- **`dim_time_control`:** each time control with a readable label, such as "3 min + 2s".
+- **`dim_opening`:** each opening with its family, such as "Sicilian Defense".
 - **Keys:** made with the `surrogate_key` macro (an md5 of the columns).
 
 **Tests:**
 - **Generic tests** in the `_*.yml` files check that keys are unique and not null, and that facts point at real dimension rows.
 - **Custom tests** in `dbt/tests/` check that:
   - every silver game reaches `fact_game`
-  - each player has one current `dim_player` row per time class
-  - no raw opponent username appears in gold
   - scores and win chances stay in range
   - every evaluation belongs to a move
 
@@ -242,12 +236,11 @@ older silver tables are dropped and rebuilt from bronze, which is always kept.
 ## Data and privacy
 
 - **Local only:** everything stays on your computer. The only network calls are to `api.chess.com`.
-- **Opponent names:**
-  - Opponent usernames are hashed with HMAC-SHA256 before gold, using `CHESSGURU_HASH_KEY`, or else a random key created once in `<data>/.hash_key`.
-  - The same opponent always gets the same key, but the name can't be recovered without the key.
-  - Deleting the key file changes every key. Delete the database too so they're rebuilt consistently.
+- **Opponent names:** not stored in the database. Only the raw files downloaded from chess.com
+  (bronze) contain them, exactly as chess.com sent them. A test checks that no opponent name
+  appears anywhere in the database.
 - **Excluded from git:** `data/` and `.env` are never committed (`.gitignore`).
-- **Starting again:** delete `chessguru.duckdb` to rebuild every table from the downloaded files, or delete the whole data folder to start from scratch.
+- **Starting again:** delete `chessguru.duckdb` to rebuild every table from the downloaded files (games will need analysing again), or delete the whole data folder to start from scratch.
 
 ## The Windows app
 

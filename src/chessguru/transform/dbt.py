@@ -30,13 +30,13 @@ class DbtResult:
 
 
 def run_dbt(settings: Settings, command: str, project_dir: Path | None = None) -> DbtResult:
-    """Run `dbt <command>` (e.g. build, docs generate) against the local database.
+    """Run `dbt <command>` (normally `build`) against the local database.
 
     dbt runs in its own process. dbt-duckdb keeps the database open for as long as
     its process lives, and DuckDB allows only one writer, so this makes sure the
     file is released as soon as dbt is done.
 
-    dbt's own files (compiled SQL, logs, docs) go in the data folder, so the
+    dbt's own files (compiled SQL, logs) go in the data folder, so the
     project folder stays clean and works when it is read-only (e.g. in Docker).
     """
     project = project_dir or settings.dbt_project_dir or DEFAULT_PROJECT_DIR
