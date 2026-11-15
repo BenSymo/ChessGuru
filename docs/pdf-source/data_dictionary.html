@@ -1,0 +1,294 @@
+<!doctype html>
+<!-- Source for docs/data_dictionary.pdf. Rebuild with: node docs/pdf-source/build.js -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>ChessGuru data dictionary</title>
+<style>
+  @page { size: A4; margin: 14mm 13mm; }
+  * { box-sizing: border-box; }
+  body { font-family: "Segoe UI", system-ui, -apple-system, sans-serif; color: #1f1f1d; margin: 0; font-size: 9.5pt; line-height: 1.35; }
+  h1 { font-size: 18pt; margin: 0 0 2mm; }
+  h2 { font-size: 13pt; margin: 7mm 0 1.5mm; padding-bottom: 1mm; border-bottom: 0.5mm solid #1f1f1d; }
+  h3 { font-size: 11pt; margin: 5mm 0 1mm; font-family: Consolas, "Cascadia Mono", monospace; }
+  p { margin: 0 0 2mm; }
+  .lead { color: #5d5c56; }
+  .meta { color: #5d5c56; font-size: 8.8pt; margin-bottom: 1.5mm; }
+  .meta b { color: #1f1f1d; font-weight: 600; }
+  table { border-collapse: collapse; width: 100%; font-size: 8.8pt; }
+  th, td { text-align: left; vertical-align: top; padding: 1.1mm 1.6mm; border-bottom: 0.25mm solid #dddcd5; }
+  th { background: #f2f1ec; font-weight: 600; }
+  td:first-child { width: 27%; font-family: Consolas, "Cascadia Mono", monospace; }
+  td:nth-child(2) { width: 13%; color: #5d5c56; font-family: Consolas, "Cascadia Mono", monospace; font-size: 8.3pt; }
+  code { font-family: Consolas, "Cascadia Mono", monospace; font-size: 0.95em; }
+  .block { break-inside: avoid; }
+  h2, h3, .meta, h2 + p { break-after: avoid; }
+  .layer { display: inline-block; padding: 0.3mm 1.6mm; border-radius: 1mm; font-size: 8pt; font-weight: 600; margin-left: 2mm; vertical-align: middle; font-family: "Segoe UI", system-ui, sans-serif; }
+  .bronze { background: #f3dcc4; } .silver { background: #e4e3dd; } .view { background: #dbe8f7; }
+  .gold { background: #f7e7a8; } .house { background: #fbe0e0; }
+  ul { margin: 0 0 2mm; padding-left: 5mm; }
+</style>
+</head>
+<body>
+
+<h1>ChessGuru data dictionary</h1>
+<p class="lead">Every table ChessGuru stores, and what each column means. For how the tables connect, see
+  <b>data_lineage.pdf</b>. All tables live in one DuckDB file, <code>&lt;data folder&gt;/chessguru.duckdb</code>.</p>
+<ul class="lead">
+  <li><b>Data folder:</b> <code>./data</code> when run from source, or <code>%LOCALAPPDATA%\ChessGuru</code> in the Windows app.</li>
+  <li><b>Usernames</b> are stored in lower case. <b>Times</b> are UTC.</li>
+  <li><b>"Your" and "the player"</b> mean the chess.com user being analysed. Opponents' names are never stored in the database.</li>
+  <li><b>Win chance</b> is 0–100, from the point of view of the side that is moving.</li>
+</ul>
+
+<h2>Bronze: raw files</h2>
+<div class="block">
+<h3>&lt;data folder&gt;/bronze/&lt;username&gt;/&lt;YYYY-MM&gt;.json <span class="layer bronze">bronze</span></h3>
+<p class="meta"><b>One file per</b> player per month · <b>Written by</b> fetch · <b>Read by</b> check</p>
+<p>Exactly what chess.com's Published-Data API sent: <code>{"games": [...]}</code>. Kept unchanged so every table
+  can be rebuilt from it. These are the only files that contain opponents' usernames. The fields ChessGuru uses
+  from each game are:</p>
+<table>
+  <tr><th>Field</th><th>Type</th><th>Meaning</th></tr>
+  <tr><td>url, uuid</td><td>text</td><td>Link to the game, and chess.com's game ID.</td></tr>
+  <tr><td>pgn</td><td>text</td><td>The moves, clock times and headers (including the opening URL).</td></tr>
+  <tr><td>time_control, time_class</td><td>text</td><td>e.g. <code>180+2</code>; one of bullet, blitz, rapid, daily.</td></tr>
+  <tr><td>end_time, rated</td><td>int, bool</td><td>When the game ended (Unix seconds); whether it was rated.</td></tr>
+  <tr><td>rules, initial_setup</td><td>text</td><td>Used to skip variants and custom start positions.</td></tr>
+  <tr><td>white / black</td><td>object</td><td>Each side's <code>username</code>, <code>rating</code> and <code>result</code> code.</td></tr>
+  <tr><td>eco</td><td>text</td><td>chess.com's opening URL (used if the PGN has none).</td></tr>
+</table>
+</div>
+
+<h2>Silver: cleaned tables</h2>
+<p>Written by Python (<code>src/chessguru</code>). If the shape of these tables changes, <code>SCHEMA_VERSION</code>
+  in <code>db.py</code> is raised and they are rebuilt from bronze.</p>
+
+<div class="block">
+<h3>silver_games <span class="layer silver">silver</span></h3>
+<p class="meta"><b>One row per</b> game, from the player's side · <b>Key</b> (username, game_uuid) · <b>Written by</b> parse · <b>Read by</b> analyse, dbt</p>
+<table>
+  <tr><th>Column</th><th>Type</th><th>Meaning</th></tr>
+  <tr><td>username</td><td>VARCHAR</td><td>The player.</td></tr>
+  <tr><td>game_uuid</td><td>VARCHAR</td><td>chess.com's game ID.</td></tr>
+  <tr><td>url</td><td>VARCHAR</td><td>Link to the game on chess.com.</td></tr>
+  <tr><td>end_time</td><td>TIMESTAMPTZ</td><td>When the game ended.</td></tr>
+  <tr><td>time_class</td><td>VARCHAR</td><td>bullet, blitz, rapid or daily.</td></tr>
+  <tr><td>time_control</td><td>VARCHAR</td><td>chess.com's code, e.g. <code>600</code>, <code>180+2</code>, <code>1/86400</code> (daily).</td></tr>
+  <tr><td>base_seconds</td><td>INTEGER</td><td>Starting clock in seconds. Null for daily games.</td></tr>
+  <tr><td>increment_seconds</td><td>INTEGER</td><td>Seconds added after each move. Null for daily games.</td></tr>
+  <tr><td>rated</td><td>BOOLEAN</td><td>Whether the game was rated.</td></tr>
+  <tr><td>player_colour</td><td>VARCHAR</td><td>white or black.</td></tr>
+  <tr><td>player_rating</td><td>INTEGER</td><td>The player's rating, as chess.com records it for this game.</td></tr>
+  <tr><td>player_result</td><td>VARCHAR</td><td>chess.com's result code for the player, e.g. win, resigned, timeout, agreed.</td></tr>
+  <tr><td>outcome</td><td>VARCHAR</td><td>win, draw or loss.</td></tr>
+  <tr><td>end_reason</td><td>VARCHAR</td><td>How the game ended, from the loser's code (e.g. checkmated, resigned, timeout), or the draw type.</td></tr>
+  <tr><td>eco_code</td><td>VARCHAR</td><td>ECO opening code, e.g. C50. May be null.</td></tr>
+  <tr><td>opening_name</td><td>VARCHAR</td><td>e.g. Sicilian Defense Najdorf Variation. Null if unknown.</td></tr>
+  <tr><td>opening_family</td><td>VARCHAR</td><td>The name up to its first "Defense", "Opening", "Game", etc., e.g. Sicilian Defense.</td></tr>
+  <tr><td>plies</td><td>INTEGER</td><td>Number of half-moves played.</td></tr>
+  <tr><td>parsed_at</td><td>TIMESTAMPTZ</td><td>When this row was written.</td></tr>
+</table>
+</div>
+
+<div class="block">
+<h3>silver_moves <span class="layer silver">silver</span></h3>
+<p class="meta"><b>One row per</b> ply (half-move), both sides · <b>Key</b> (username, game_uuid, ply) · <b>Written by</b> parse · <b>Read by</b> analyse, dbt</p>
+<table>
+  <tr><th>Column</th><th>Type</th><th>Meaning</th></tr>
+  <tr><td>username, game_uuid</td><td>VARCHAR</td><td>The game this move belongs to.</td></tr>
+  <tr><td>ply</td><td>INTEGER</td><td>Half-move number, from 1.</td></tr>
+  <tr><td>move_number</td><td>INTEGER</td><td>Full-move number, as written in chess notation (1. e4 e5 are both move 1).</td></tr>
+  <tr><td>colour</td><td>VARCHAR</td><td>Who moved: white or black.</td></tr>
+  <tr><td>is_player_move</td><td>BOOLEAN</td><td>True if the player made this move.</td></tr>
+  <tr><td>san</td><td>VARCHAR</td><td>The move in standard notation, e.g. Nf3.</td></tr>
+  <tr><td>uci</td><td>VARCHAR</td><td>The move as from-square and to-square, e.g. g1f3.</td></tr>
+  <tr><td>piece</td><td>VARCHAR</td><td>Piece moved: P, N, B, R, Q or K.</td></tr>
+  <tr><td>fen_before</td><td>VARCHAR</td><td>The position before the move (FEN).</td></tr>
+  <tr><td>clock_seconds</td><td>DOUBLE</td><td>The mover's clock after the move. Null in daily games or if missing.</td></tr>
+  <tr><td>time_spent_seconds</td><td>DOUBLE</td><td>Previous clock + increment − this clock. Null if unknown.</td></tr>
+</table>
+</div>
+
+<div class="block">
+<h3>silver_move_evals <span class="layer silver">silver</span></h3>
+<p class="meta"><b>One row per</b> ply in analysed games, both sides · <b>Key</b> (username, game_uuid, ply) · <b>Written by</b> analyse · <b>Read by</b> dbt</p>
+<p>Every score is from the point of view of the side that made the move.</p>
+<table>
+  <tr><th>Column</th><th>Type</th><th>Meaning</th></tr>
+  <tr><td>username, game_uuid, ply</td><td>mixed</td><td>The move this verdict is for.</td></tr>
+  <tr><td>phase</td><td>VARCHAR</td><td>opening, middlegame or endgame (see the guide for the rules).</td></tr>
+  <tr><td>cp_before, cp_after</td><td>INTEGER</td><td>Stockfish's score in centipawns before and after the move, capped at ±1000 (a forced mate counts as ±1000).</td></tr>
+  <tr><td>mate_before, mate_after</td><td>INTEGER</td><td>Moves to a forced mate: positive if the mover is mating, negative if being mated. <code>mate_after = 0</code> means this move gave checkmate. Null if no forced mate.</td></tr>
+  <tr><td>win_before, win_after</td><td>DOUBLE</td><td>Win chance (0–100) before and after the move.</td></tr>
+  <tr><td>win_drop</td><td>DOUBLE</td><td>How much the move lowered the win chance (0 or more).</td></tr>
+  <tr><td>cp_loss</td><td>INTEGER</td><td>How many centipawns the move lost (0 or more).</td></tr>
+  <tr><td>accuracy</td><td>DOUBLE</td><td>Move accuracy, 0–100 (Lichess formula).</td></tr>
+  <tr><td>label</td><td>VARCHAR</td><td>best, good, inaccuracy (drop 5+), mistake (10+) or blunder (15+).</td></tr>
+  <tr><td>best_move_uci, best_move_san</td><td>VARCHAR</td><td>Stockfish's preferred move in the position before. Null if there wasn't one.</td></tr>
+  <tr><td>tags</td><td>VARCHAR[]</td><td>Why the move went wrong: hanging_piece, missed_fork, missed_pin, missed_skewer, missed_mate, allowed_mate, missed_punish. Often empty.</td></tr>
+</table>
+</div>
+
+<div class="block">
+<h3>silver_game_analysis <span class="layer silver">silver</span></h3>
+<p class="meta"><b>One row per</b> analysed game · <b>Key</b> (username, game_uuid) · <b>Written by</b> analyse · <b>Read by</b> analyse (to skip done games), dbt</p>
+<table>
+  <tr><th>Column</th><th>Type</th><th>Meaning</th></tr>
+  <tr><td>username, game_uuid</td><td>VARCHAR</td><td>The game.</td></tr>
+  <tr><td>engine_depth</td><td>INTEGER</td><td>Stockfish depth used. A game is analysed again only if a greater depth is asked for.</td></tr>
+  <tr><td>player_accuracy</td><td>DOUBLE</td><td>The player's accuracy for the game, 0–100.</td></tr>
+  <tr><td>analysed_at</td><td>TIMESTAMPTZ</td><td>When the analysis was saved.</td></tr>
+</table>
+</div>
+
+<h2>Housekeeping tables</h2>
+
+<div class="block">
+<h3>quarantine <span class="layer house">housekeeping</span></h3>
+<p class="meta"><b>One row per</b> game (or month file) set aside · <b>Written by</b> check, parse · <b>Read by</b> Data health page</p>
+<p>Each step replaces its own rows on every run, so this always shows the current problems.</p>
+<table>
+  <tr><th>Column</th><th>Type</th><th>Meaning</th></tr>
+  <tr><td>username</td><td>VARCHAR</td><td>The player.</td></tr>
+  <tr><td>source_file</td><td>VARCHAR</td><td>The month file (e.g. <code>2026-11.json</code>), or <code>silver</code> for games rejected while parsing.</td></tr>
+  <tr><td>game_url</td><td>VARCHAR</td><td>The game, if known. Null when a whole month file couldn't be read.</td></tr>
+  <tr><td>reason</td><td>VARCHAR</td><td>Why, e.g. "duplicate game", "variant 'chess960' is not supported", "PGN could not be parsed".</td></tr>
+  <tr><td>quarantined_at</td><td>TIMESTAMPTZ</td><td>When it was set aside.</td></tr>
+  <tr><td>step</td><td>VARCHAR</td><td>check or parse.</td></tr>
+</table>
+</div>
+
+<div class="block">
+<h3>pipeline_runs <span class="layer house">housekeeping</span></h3>
+<p class="meta"><b>One row per</b> pipeline step run · <b>Written by</b> every step · <b>Read by</b> Data health page</p>
+<table>
+  <tr><th>Column</th><th>Type</th><th>Meaning</th></tr>
+  <tr><td>run_id</td><td>VARCHAR</td><td>Random ID for this run.</td></tr>
+  <tr><td>step</td><td>VARCHAR</td><td>fetch, check, parse, analyse or build.</td></tr>
+  <tr><td>username</td><td>VARCHAR</td><td>The player (<code>all</code> for a build from the command line).</td></tr>
+  <tr><td>started_at, finished_at</td><td>TIMESTAMPTZ</td><td>When the step started and ended.</td></tr>
+  <tr><td>status</td><td>VARCHAR</td><td>succeeded or failed.</td></tr>
+  <tr><td>details</td><td>JSON</td><td>What the step did (e.g. games downloaded, analysed), or the error if it failed.</td></tr>
+</table>
+</div>
+
+<div class="block">
+<h3>schema_version <span class="layer house">housekeeping</span></h3>
+<p class="meta"><b>One row</b> · <b>Written by</b> <code>db.py</code> when the database is opened</p>
+<table>
+  <tr><th>Column</th><th>Type</th><th>Meaning</th></tr>
+  <tr><td>version</td><td>INTEGER</td><td>The silver table layout in use. If it doesn't match the code, silver is dropped and rebuilt from bronze.</td></tr>
+</table>
+</div>
+
+<h2>dbt views (schemas staging and intermediate)</h2>
+<p>Rebuilt by every <code>dbt build</code> (files in <code>dbt/models/</code>). They are steps on the way to gold; the
+  dashboard doesn't read them directly.</p>
+<table class="block">
+  <tr><th>View</th><th>Built from</th><th>What it adds</th></tr>
+  <tr><td>staging.stg_games</td><td>silver_games</td><td>The columns gold needs; <code>date_day</code> (UTC date); <code>score</code> (1, 0.5 or 0); "Unknown" for missing openings.</td></tr>
+  <tr><td>staging.stg_moves</td><td>silver_moves</td><td>The columns gold needs.</td></tr>
+  <tr><td>staging.stg_move_evals</td><td>silver_move_evals</td><td><code>move_accuracy</code> (renamed); <code>is_bad_move</code> (mistake or blunder).</td></tr>
+  <tr><td>staging.stg_game_analysis</td><td>silver_game_analysis</td><td><code>engine_accuracy</code> (renamed).</td></tr>
+  <tr><td>intermediate.int_player_move_evals</td><td>stg_moves, stg_move_evals, stg_games</td><td>The player's own analysed moves, with the extra tag <code>low_clock</code> on bad moves made with under 10% of the starting clock.</td></tr>
+  <tr><td>intermediate.int_game_eval_stats</td><td>int_player_move_evals</td><td>Per game: the player's blunders, mistakes, inaccuracies and highest win chance.</td></tr>
+</table>
+
+<h2>Gold: the tables the dashboard reads (schema gold)</h2>
+<p>Built and tested by <code>dbt build</code>. The dashboard opens them read-only (<code>src/chessguru/app/data.py</code>).
+  <code>*_key</code> columns are md5 hashes of the columns that identify a row, used to join tables.</p>
+
+<div class="block">
+<h3>gold.fact_game <span class="layer gold">gold</span></h3>
+<p class="meta"><b>One row per</b> game, from the player's side · <b>Key</b> game_key · <b>Joins to</b> dim_time_control, dim_opening · <b>Read by</b> every page, tips</p>
+<table>
+  <tr><th>Column</th><th>Type</th><th>Meaning</th></tr>
+  <tr><td>game_key</td><td>VARCHAR</td><td>Unique key for (username, game_uuid).</td></tr>
+  <tr><td>game_uuid</td><td>VARCHAR</td><td>chess.com's game ID.</td></tr>
+  <tr><td>username</td><td>VARCHAR</td><td>The player.</td></tr>
+  <tr><td>time_control_key</td><td>VARCHAR</td><td>Joins to dim_time_control.</td></tr>
+  <tr><td>opening_key</td><td>VARCHAR</td><td>Joins to dim_opening.</td></tr>
+  <tr><td>end_time, date_day</td><td>TIMESTAMPTZ, DATE</td><td>When the game ended, and that day (UTC).</td></tr>
+  <tr><td>time_class</td><td>VARCHAR</td><td>bullet, blitz, rapid or daily.</td></tr>
+  <tr><td>rated</td><td>BOOLEAN</td><td>Whether the game was rated.</td></tr>
+  <tr><td>player_colour</td><td>VARCHAR</td><td>white or black.</td></tr>
+  <tr><td>outcome</td><td>VARCHAR</td><td>win, draw or loss.</td></tr>
+  <tr><td>score</td><td>DECIMAL</td><td>1 for a win, 0.5 for a draw, 0 for a loss.</td></tr>
+  <tr><td>end_reason</td><td>VARCHAR</td><td>How the game ended (see silver_games).</td></tr>
+  <tr><td>player_rating</td><td>INTEGER</td><td>The player's rating, as chess.com records it for this game.</td></tr>
+  <tr><td>plies</td><td>INTEGER</td><td>Number of half-moves.</td></tr>
+  <tr><td>url</td><td>VARCHAR</td><td>Link to the game on chess.com.</td></tr>
+  <tr><td>is_analysed</td><td>BOOLEAN</td><td>Stockfish has analysed this game. The columns below are null if not.</td></tr>
+  <tr><td>engine_accuracy</td><td>DOUBLE</td><td>The player's accuracy for the game, 0–100.</td></tr>
+  <tr><td>blunders, mistakes, inaccuracies</td><td>BIGINT</td><td>How many of each the player made.</td></tr>
+  <tr><td>peak_win_chance</td><td>DOUBLE</td><td>The highest win chance the player had before any of their moves.</td></tr>
+  <tr><td>failed_to_convert</td><td>BOOLEAN</td><td>The player reached a 75%+ win chance (about +3) but didn't win.</td></tr>
+</table>
+</div>
+
+<div class="block">
+<h3>gold.fact_move <span class="layer gold">gold</span></h3>
+<p class="meta"><b>One row per</b> ply, both sides · <b>Key</b> move_key · <b>Joins to</b> fact_game on game_key · <b>Read by</b> every page (player's analysed moves), Game viewer (all moves)</p>
+<table>
+  <tr><th>Column</th><th>Type</th><th>Meaning</th></tr>
+  <tr><td>move_key</td><td>VARCHAR</td><td>Unique key for (username, game_uuid, ply).</td></tr>
+  <tr><td>game_key</td><td>VARCHAR</td><td>The game, in fact_game.</td></tr>
+  <tr><td>username, ply, move_number, colour</td><td>mixed</td><td>As in silver_moves.</td></tr>
+  <tr><td>is_player_move</td><td>BOOLEAN</td><td>True if the player made this move.</td></tr>
+  <tr><td>san, uci, piece, fen_before</td><td>VARCHAR</td><td>The move and the position before it (see silver_moves).</td></tr>
+  <tr><td>clock_seconds, time_spent_seconds</td><td>DOUBLE</td><td>The mover's clock after the move, and time spent on it.</td></tr>
+  <tr><td>clock_fraction_left</td><td>DOUBLE</td><td>clock_seconds ÷ starting clock, e.g. 0.1 = 10% left. Null for daily games.</td></tr>
+  <tr><td>is_analysed</td><td>BOOLEAN</td><td>Stockfish has analysed this move. The columns below are null if not.</td></tr>
+  <tr><td>phase</td><td>VARCHAR</td><td>opening, middlegame or endgame.</td></tr>
+  <tr><td>label</td><td>VARCHAR</td><td>best, good, inaccuracy, mistake or blunder.</td></tr>
+  <tr><td>is_bad_move</td><td>BOOLEAN</td><td>The move was a mistake or blunder.</td></tr>
+  <tr><td>win_before, win_after, win_drop</td><td>DOUBLE</td><td>Win chance before and after the move, and the drop (mover's point of view).</td></tr>
+  <tr><td>move_accuracy</td><td>DOUBLE</td><td>Move accuracy, 0–100.</td></tr>
+  <tr><td>best_move_uci, best_move_san</td><td>VARCHAR</td><td>Stockfish's preferred move.</td></tr>
+  <tr><td>tags</td><td>VARCHAR[]</td><td>Why the move went wrong. The player's moves can also have <code>low_clock</code>.</td></tr>
+</table>
+</div>
+
+<div class="block">
+<h3>gold.dim_time_control <span class="layer gold">gold</span></h3>
+<p class="meta"><b>One row per</b> time control · <b>Key</b> time_control_key · <b>Read by</b> every page (the label)</p>
+<table>
+  <tr><th>Column</th><th>Type</th><th>Meaning</th></tr>
+  <tr><td>time_control_key</td><td>VARCHAR</td><td>Unique key for (time_control, time_class).</td></tr>
+  <tr><td>time_control, time_class</td><td>VARCHAR</td><td>As in silver_games.</td></tr>
+  <tr><td>base_seconds, increment_seconds</td><td>INTEGER</td><td>Starting clock and increment. Null for daily games.</td></tr>
+  <tr><td>label</td><td>VARCHAR</td><td>Readable name, e.g. "3 min + 2s", "10 min", "Daily".</td></tr>
+</table>
+</div>
+
+<div class="block">
+<h3>gold.dim_opening <span class="layer gold">gold</span></h3>
+<p class="meta"><b>One row per</b> opening · <b>Key</b> opening_key · <b>Read by</b> every page (the opening family)</p>
+<table>
+  <tr><th>Column</th><th>Type</th><th>Meaning</th></tr>
+  <tr><td>opening_key</td><td>VARCHAR</td><td>Unique key for (eco_code, opening_name).</td></tr>
+  <tr><td>eco_code</td><td>VARCHAR</td><td>ECO code. May be null.</td></tr>
+  <tr><td>opening_name</td><td>VARCHAR</td><td>Full opening name, or "Unknown".</td></tr>
+  <tr><td>opening_family</td><td>VARCHAR</td><td>e.g. Sicilian Defense, or "Unknown".</td></tr>
+</table>
+</div>
+
+<h2>Tests that guard this data</h2>
+<ul>
+  <li><b>Before silver:</b> the data contract and quality checks (<code>quality/checks.py</code>).</li>
+  <li><b>On every dbt build:</b>
+    <ul>
+      <li>keys are unique and not null</li>
+      <li>facts join to real dimension rows</li>
+      <li>outcome, colour, time class, label and phase only take allowed values</li>
+      <li>every silver game reaches fact_game</li>
+      <li>scores and win chances are in range</li>
+      <li>every evaluation belongs to a move</li>
+    </ul>
+  </li>
+  <li><b>In the Python tests:</b> no opponent name appears anywhere in the database (<code>tests/test_dbt.py</code>).</li>
+</ul>
+
+</body>
+</html>
