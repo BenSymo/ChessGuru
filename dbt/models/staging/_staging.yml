@@ -2,7 +2,7 @@ version: 2
 
 models:
   - name: stg_games
-    description: Games with tidy types, a numeric score and the opponent's name hashed.
+    description: Games with tidy types and a numeric score (1, 0.5 or 0).
     columns:
       - name: game_uuid
         data_tests: [not_null]
@@ -45,8 +45,6 @@ models:
           - accepted_values:
               arguments:
                 values: [opening, middlegame, endgame]
-      - name: mate_after
-        description: "Positive: the mover can force mate. Negative: the mover is getting mated. 0: this move gave checkmate."
 
   - name: stg_game_analysis
     columns:

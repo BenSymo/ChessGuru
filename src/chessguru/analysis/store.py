@@ -86,8 +86,8 @@ def write_analysis(
         conn.execute("DELETE FROM silver_game_analysis WHERE username = ? AND game_uuid = ?", key)
         conn.execute("INSERT INTO silver_move_evals BY NAME SELECT * FROM new_evals")
         conn.execute(
-            "INSERT INTO silver_game_analysis VALUES (?, ?, ?, ?, ?, ?)",
-            [*key, depth, analysis.player_accuracy, analysis.opponent_accuracy, when],
+            "INSERT INTO silver_game_analysis VALUES (?, ?, ?, ?, ?)",
+            [*key, depth, analysis.player_accuracy, when],
         )
         conn.execute("COMMIT")
     except BaseException:

@@ -55,7 +55,6 @@ class MoveEval:
 class GameAnalysis:
     moves: list[MoveEval]
     player_accuracy: float | None
-    opponent_accuracy: float | None
 
 
 def _flip(ev: Evaluation) -> Evaluation:
@@ -80,7 +79,7 @@ def _parse_move(board: chess.Board, uci: str | None) -> chess.Move | None:
 
 def analyse_game(moves: Sequence[MoveInput], evaluator: Evaluator) -> GameAnalysis:
     if not moves:
-        return GameAnalysis([], None, None)
+        return GameAnalysis([], None)
 
     boards = [chess.Board(m.fen_before) for m in moves]
     final = boards[-1].copy(stack=False)
@@ -133,8 +132,7 @@ def analyse_game(moves: Sequence[MoveInput], evaluator: Evaluator) -> GameAnalys
         )
 
     player = [r.accuracy for r, m in zip(results, moves, strict=True) if m.is_player_move]
-    opponent = [r.accuracy for r, m in zip(results, moves, strict=True) if not m.is_player_move]
-    return GameAnalysis(results, _round(game_accuracy(player)), _round(game_accuracy(opponent)))
+    return GameAnalysis(results, _round(game_accuracy(player)))
 
 
 def _round(value: float | None) -> float | None:

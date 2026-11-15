@@ -7,7 +7,6 @@ from __future__ import annotations
 
 import io
 import re
-from collections.abc import Callable
 from dataclasses import asdict, dataclass
 from datetime import datetime
 from typing import Any, Literal
@@ -47,19 +46,13 @@ class GameRow:
     rated: bool
     player_colour: Colour
     player_rating: int
-    opponent_username: str
-    opponent_key: str
-    opponent_rating: int
     player_result: str
     outcome: Outcome
     end_reason: str
     eco_code: str | None
     opening_name: str | None
     opening_family: str | None
-    player_accuracy: float | None
-    opponent_accuracy: float | None
     plies: int
-    pgn: str
 
 
 @dataclass(frozen=True)
@@ -73,10 +66,6 @@ class MoveRow:
     san: str
     uci: str
     piece: str
-    is_capture: bool
-    is_check: bool
-    is_castle: bool
-    is_promotion: bool
     fen_before: str
     clock_seconds: float | None
     time_spent_seconds: float | None
@@ -131,10 +120,11 @@ def opening_from_url(url: str | None) -> tuple[str | None, str | None]:
     return " ".join(words), " ".join(family)
 
 
-def parse_game(game: Game, username: str, hash_name: Callable[[str], str]) -> ParsedGame:
+def parse_game(game: Game, username: str) -> ParsedGame:
     """Build the silver rows for one game, from `username`'s side of the board.
 
-    `hash_name` turns the opponent's username into a key safe to share (see governance).
+    Nothing about the opponent is kept except their result, so no one else's
+    personal data is stored.
     """
     colour = game.colour_of(username)
     if colour is None:
@@ -176,10 +166,6 @@ def parse_game(game: Game, username: str, hash_name: Callable[[str], str]) -> Pa
                 san=board.san(move),
                 uci=move.uci(),
                 piece=piece.symbol().upper(),
-                is_capture=board.is_capture(move),
-                is_check=board.gives_check(move),
-                is_castle=board.is_castling(move),
-                is_promotion=move.promotion is not None,
                 fen_before=board.fen(),
                 clock_seconds=clock,
                 time_spent_seconds=spent,
@@ -191,7 +177,6 @@ def parse_game(game: Game, username: str, hash_name: Callable[[str], str]) -> Pa
         raise ParseError("no moves played")
 
     opening_name, opening_family = opening_from_url(pgn_game.headers.get("ECOUrl") or game.eco)
-    accuracy = game.accuracies
     outcome = outcome_of(player.result)
     return ParsedGame(
         game=GameRow(
@@ -206,9 +191,6 @@ def parse_game(game: Game, username: str, hash_name: Callable[[str], str]) -> Pa
             rated=game.rated,
             player_colour=colour,
             player_rating=player.rating,
-            opponent_username=opponent.username,
-            opponent_key=hash_name(opponent.username),
-            opponent_rating=opponent.rating,
             player_result=player.result,
             outcome=outcome,
             # How the game ended: the loser's code says it best (resigned, timeout, ...).
@@ -216,12 +198,7 @@ def parse_game(game: Game, username: str, hash_name: Callable[[str], str]) -> Pa
             eco_code=pgn_game.headers.get("ECO") or None,
             opening_name=opening_name,
             opening_family=opening_family,
-            player_accuracy=getattr(accuracy, colour) if accuracy else None,
-            opponent_accuracy=(
-                getattr(accuracy, "black" if colour == "white" else "white") if accuracy else None
-            ),
             plies=len(moves),
-            pgn=game.pgn,
         ),
         moves=moves,
     )

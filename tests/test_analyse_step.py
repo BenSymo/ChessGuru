@@ -20,7 +20,7 @@ NOW = datetime(2026, 11, 14, tzinfo=UTC)
 
 @pytest.fixture
 def settings(tmp_path: Path) -> Settings:
-    settings = Settings(data_dir=tmp_path / "data", hash_key="k")
+    settings = Settings(data_dir=tmp_path / "data")
     games = [Game.model_validate(make_game(n)) for n in range(1, 6)]
     pipeline.parse(settings, "testplayer", games, now=NOW)
     return settings

@@ -24,14 +24,11 @@ class Filters:
 
 GAMES_SQL = """
 select
-    f.game_key, f.game_uuid, f.username, f.end_time, d.date_day, f.end_hour_utc,
-    f.time_class, tc.label as time_control, f.rated, f.player_colour, f.outcome, f.score,
-    f.end_reason, f.player_rating, f.opponent_rating, f.rating_diff, f.plies, f.full_moves,
-    f.player_accuracy as chesscom_accuracy, f.is_analysed, f.engine_accuracy,
-    f.blunders, f.mistakes, f.inaccuracies, f.peak_win_chance, f.failed_to_convert, f.url,
-    o.eco_code, o.opening_name, o.opening_family
+    f.game_key, f.game_uuid, f.username, f.end_time, f.date_day, f.time_class,
+    tc.label as time_control, f.rated, f.player_colour, f.outcome, f.score, f.end_reason,
+    f.player_rating, f.plies, f.is_analysed, f.engine_accuracy, f.blunders, f.mistakes,
+    f.inaccuracies, f.peak_win_chance, f.failed_to_convert, f.url, o.opening_family
 from gold.fact_game f
-join gold.dim_date d using (date_key)
 join gold.dim_time_control tc using (time_control_key)
 join gold.dim_opening o using (opening_key)
 where f.username = ?
@@ -41,7 +38,7 @@ order by f.end_time desc, f.game_uuid
 MOVES_SQL = """
 select
     m.game_key, m.ply, m.move_number, m.san, m.piece, m.phase, m.label, m.is_bad_move,
-    m.win_before, m.win_after, m.win_drop, m.cp_loss, m.move_accuracy, m.best_move_san,
+    m.win_before, m.win_after, m.win_drop, m.move_accuracy, m.best_move_san,
     m.tags, m.clock_seconds, m.time_spent_seconds, m.clock_fraction_left, m.fen_before
 from gold.fact_move m
 where m.username = ? and m.is_player_move and m.is_analysed
@@ -102,7 +99,7 @@ def load_moves(db_path: Path, username: str, game_keys: list[str]) -> pd.DataFra
 
 _MOVE_COLUMNS = [
     "game_key", "ply", "move_number", "san", "piece", "phase", "label", "is_bad_move",
-    "win_before", "win_after", "win_drop", "cp_loss", "move_accuracy", "best_move_san",
+    "win_before", "win_after", "win_drop", "move_accuracy", "best_move_san",
     "tags", "clock_seconds", "time_spent_seconds", "clock_fraction_left", "fen_before",
 ]  # fmt: skip
 

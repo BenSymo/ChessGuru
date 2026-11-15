@@ -8,10 +8,6 @@ select
     san,
     uci,
     piece,
-    is_capture,
-    is_check,
-    is_castle,
-    is_promotion,
     fen_before,
     clock_seconds,
     time_spent_seconds

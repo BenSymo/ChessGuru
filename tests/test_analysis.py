@@ -208,8 +208,8 @@ def test_scholars_mate_from_blacks_side() -> None:
     assert qxf7.label == "best"
     assert qxf7.mate_after == 0  # this move gave checkmate
     assert qxf7.win_after == 100
-    assert result.player_accuracy is not None and result.opponent_accuracy is not None
-    assert result.player_accuracy < result.opponent_accuracy
+    assert result.player_accuracy is not None
+    assert result.player_accuracy < 90  # one blunder in four moves pulls it down hard
 
 
 def test_missed_mate() -> None:
