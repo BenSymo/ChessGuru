@@ -1,0 +1,171 @@
+<!doctype html>
+<!-- Source for docs/data_lineage.pdf. Rebuild with: node docs/pdf-source/build.js -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>ChessGuru data lineage</title>
+<style>
+  @page { size: A4 landscape; margin: 12mm; }
+  * { box-sizing: border-box; }
+  body { font-family: "Segoe UI", system-ui, -apple-system, sans-serif; color: #1f1f1d; margin: 0; font-size: 10.5pt; }
+  h1 { font-size: 18pt; margin: 0 0 2mm; }
+  h2 { font-size: 13pt; margin: 0 0 3mm; }
+  p.lead { margin: 0 0 4mm; color: #5d5c56; }
+  .page { page-break-after: always; }
+  .page:last-child { page-break-after: auto; }
+  svg text { font-family: inherit; }
+  table { border-collapse: collapse; width: 100%; font-size: 9.5pt; }
+  th, td { text-align: left; vertical-align: top; padding: 1.6mm 2mm; border-bottom: 0.3mm solid #dddcd5; }
+  th { background: #f2f1ec; }
+  code { font-family: Consolas, "Cascadia Mono", monospace; font-size: 0.92em; }
+  .legend { display: flex; gap: 6mm; flex-wrap: wrap; margin-top: 3mm; font-size: 9pt; color: #3d3d3a; }
+  .legend span { display: inline-flex; align-items: center; gap: 1.5mm; }
+  .sw { width: 5mm; height: 3.2mm; border-radius: 0.8mm; display: inline-block; border: 0.3mm solid #8a897f; }
+</style>
+</head>
+<body>
+
+<section class="page">
+  <h1>ChessGuru data lineage</h1>
+  <p class="lead">How data flows from chess.com to the dashboard. Arrows point from a source to the table built from it.
+    Everything lives in one DuckDB file (<code>chessguru.duckdb</code>) except the raw month files.</p>
+  <svg id="diagram" width="100%" viewBox="0 0 1205 560" role="img"
+       aria-label="Data lineage diagram"></svg>
+  <div class="legend">
+    <span><i class="sw" style="background:#f3dcc4"></i>Bronze: raw files</span>
+    <span><i class="sw" style="background:#e4e3dd"></i>Silver: cleaned tables (Python)</span>
+    <span><i class="sw" style="background:#dbe8f7;border-style:dashed"></i>dbt views (staging, intermediate)</span>
+    <span><i class="sw" style="background:#f7e7a8"></i>Gold: tables the dashboard reads</span>
+    <span><i class="sw" style="background:#d6efd6"></i>Dashboard</span>
+    <span><i class="sw" style="background:#fbe0e0"></i>Housekeeping</span>
+  </div>
+</section>
+
+<section class="page">
+  <h2>What each step does</h2>
+  <table>
+    <tr><th style="width:10%">Step</th><th style="width:16%">Code</th><th style="width:17%">Reads</th><th style="width:18%">Writes</th><th>What happens</th></tr>
+    <tr><td><b>fetch</b></td><td><code>ingest/fetch.py</code>, <code>api/client.py</code></td><td>chess.com Published-Data API</td><td>Bronze month files</td>
+      <td>Downloads months newest first until there are enough games. A month is reused only if it was downloaded after it ended.</td></tr>
+    <tr><td><b>check</b></td><td><code>quality/checks.py</code></td><td>Bronze month files</td><td><code>quarantine</code></td>
+      <td>Validates every game against the data contract. Bad games are set aside with a reason; the run stops if over half break the contract.</td></tr>
+    <tr><td><b>parse</b></td><td><code>parse/games.py</code>, <code>parse/silver.py</code></td><td>Checked games</td><td><code>silver_games</code>, <code>silver_moves</code>, <code>quarantine</code></td>
+      <td>One row per game from your side, one row per move. Opponent names are not kept.</td></tr>
+    <tr><td><b>analyse</b></td><td><code>analysis/</code></td><td><code>silver_games</code>, <code>silver_moves</code></td><td><code>silver_move_evals</code>, <code>silver_game_analysis</code></td>
+      <td>Stockfish scores every position. Each move gets a win-chance drop, label, accuracy, phase and reason tags.</td></tr>
+    <tr><td><b>build</b></td><td><code>transform/dbt.py</code>, <code>dbt/</code></td><td>The four silver tables</td><td>Staging and intermediate views, gold tables</td>
+      <td>dbt renames and joins the silver tables, adds the <code>low_clock</code> tag and per-game counts, and tests the result.</td></tr>
+    <tr><td><b>dashboard</b></td><td><code>app/data.py</code></td><td>Gold tables, <code>quarantine</code>, <code>pipeline_runs</code>, silver row counts</td><td>Nothing</td>
+      <td>Read-only queries. Filters, summaries and tips are worked out in Python from the gold rows.</td></tr>
+    <tr><td><b>every step</b></td><td><code>db.py</code> (<code>logged_run</code>)</td><td>&ndash;</td><td><code>pipeline_runs</code></td>
+      <td>One row per step run: when, whether it worked, and what it did or why it failed.</td></tr>
+  </table>
+  <p style="margin-top:4mm;color:#5d5c56">Column-by-column detail for every table is in <b>data_dictionary.pdf</b>.</p>
+</section>
+
+<script>
+const COLOURS = {
+  source: ["#ffffff", "#8a897f"], bronze: ["#f3dcc4", "#b07a45"], silver: ["#e4e3dd", "#8a897f"],
+  view: ["#dbe8f7", "#5b86b8"], gold: ["#f7e7a8", "#b39124"], app: ["#d6efd6", "#4f9a4f"],
+  house: ["#fbe0e0", "#c07070"],
+};
+const W = 136, H = 34;
+// [id, label, layer, x, y]
+const nodes = [
+  ["api", "chess.com API", "source", 10, 230],
+  ["bronze", "month files (JSON)", "bronze", 160, 230],
+  ["q", "quarantine", "house", 160, 420],
+  ["sg", "silver_games", "silver", 310, 120],
+  ["sm", "silver_moves", "silver", 310, 230],
+  ["runs", "pipeline_runs", "house", 310, 470],
+  ["se", "silver_move_evals", "silver", 460, 290],
+  ["sa", "silver_game_analysis", "silver", 460, 380],
+  ["stg_g", "stg_games", "view", 610, 120],
+  ["stg_m", "stg_moves", "view", 610, 210],
+  ["stg_e", "stg_move_evals", "view", 610, 300],
+  ["stg_a", "stg_game_analysis", "view", 610, 390],
+  ["int_p", "int_player_move_evals", "view", 760, 250],
+  ["int_s", "int_game_eval_stats", "view", 760, 345],
+  ["dim_tc", "dim_time_control", "gold", 910, 40],
+  ["dim_o", "dim_opening", "gold", 910, 105],
+  ["fg", "fact_game", "gold", 910, 190],
+  ["fm", "fact_move", "gold", 910, 300],
+  ["app", "Dashboard", "app", 1060, 245],
+];
+const edges = [
+  ["api", "bronze"], ["bronze", "sg"], ["bronze", "sm"], ["bronze", "q"],
+  ["sm", "se"], ["sm", "sa"],
+  ["sg", "stg_g"], ["sm", "stg_m"], ["se", "stg_e"], ["sa", "stg_a"],
+  ["stg_g", "dim_tc"], ["stg_g", "dim_o"], ["stg_g", "fg"], ["stg_a", "fg"], ["int_s", "fg"],
+  ["stg_m", "int_p"], ["stg_e", "int_p"], ["stg_g", "int_p"], ["int_p", "int_s"],
+  ["stg_m", "fm"], ["stg_e", "fm"], ["int_p", "fm"],
+  ["fg", "app"], ["fm", "app"], ["dim_tc", "app"], ["dim_o", "app"], ["q", "app"], ["runs", "app"],
+];
+const stepLabels = [
+  ["fetch", 150, 222], ["check + parse", 300, 100], ["analyse (Stockfish)", 455, 280],
+  ["dbt build", 735, 18],
+];
+const notes = [["every step logs a row here", 378, 520]];
+const columns = [
+  ["Source", 10], ["Bronze", 160], ["Silver: parsed", 310], ["Silver: analysed", 460],
+  ["dbt staging", 610], ["dbt intermediate", 760], ["Gold", 910], ["App", 1060],
+];
+
+const svg = document.getElementById("diagram");
+const NS = "http://www.w3.org/2000/svg";
+const el = (name, attrs, text) => {
+  const e = document.createElementNS(NS, name);
+  for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, v);
+  if (text) e.textContent = text;
+  svg.appendChild(e);
+  return e;
+};
+const defs = el("defs", {});
+const marker = document.createElementNS(NS, "marker");
+for (const [k, v] of Object.entries({ id: "arrow", viewBox: "0 0 10 10", refX: 9, refY: 5,
+  markerWidth: 6, markerHeight: 6, orient: "auto-start-reverse" })) marker.setAttribute(k, v);
+const tip = document.createElementNS(NS, "path");
+tip.setAttribute("d", "M0,0 L10,5 L0,10 z");
+tip.setAttribute("fill", "#6b6a63");
+marker.appendChild(tip);
+defs.appendChild(marker);
+
+for (const [name, x] of columns) {
+  el("text", { x: x + W / 2, y: 552, "text-anchor": "middle", "font-size": 11, fill: "#8a897f",
+    "font-weight": 600 }, name);
+}
+const at = Object.fromEntries(nodes.map(([id, , , x, y]) => [id, { x, y }]));
+for (const [from, to] of edges) {
+  const a = at[from], b = at[to];
+  let x1, y1, x2, y2, d;
+  if (to === "app" && (from === "q" || from === "runs")) {
+    // Housekeeping tables: run along the bottom, then up into the dashboard.
+    x1 = a.x + W; y1 = a.y + H / 2; x2 = b.x + W / 2 + (from === "q" ? -20 : 20); y2 = b.y + H;
+    d = `M${x1},${y1} L${x2 - 10},${y1} Q${x2},${y1} ${x2},${y1 - 10} L${x2},${y2 + 2}`;
+  } else if (Math.abs(a.x - b.x) < 5) {  // same column: curve out to the left, so it skips boxes between
+    x1 = a.x; y1 = a.y + H / 2; x2 = b.x; y2 = b.y + H / 2;
+    const out = a.x - 18 - (Math.abs(b.y - a.y) > 150 ? 14 : 0);
+    d = `M${x1},${y1} C${out},${y1} ${out},${y2} ${x2 - 2},${y2}`;
+  } else {
+    x1 = a.x + W; y1 = a.y + H / 2; x2 = b.x; y2 = b.y + H / 2;
+    const mid = (x1 + x2) / 2;
+    d = `M${x1},${y1} C${mid},${y1} ${mid},${y2} ${x2 - 2},${y2}`;
+  }
+  el("path", { d, fill: "none", stroke: "#9b9a91", "stroke-width": 1.3, "marker-end": "url(#arrow)" });
+}
+for (const [id, label, layer, x, y] of nodes) {
+  const [fill, stroke] = COLOURS[layer];
+  el("rect", { x, y, width: W, height: H, rx: 6, fill, stroke, "stroke-width": 1.3,
+    "stroke-dasharray": layer === "view" ? "4 3" : "none" });
+  el("text", { x: x + W / 2, y: y + H / 2 + 4, "text-anchor": "middle", "font-size": 11,
+    "font-family": layer === "source" || layer === "app" || id === "bronze" ? "inherit" : "Consolas, monospace" }, label);
+}
+for (const [text, x, y] of notes) {
+  el("text", { x, y, "font-size": 10, fill: "#8a897f", "text-anchor": "middle" }, text);
+}
+for (const [text, x, y] of stepLabels) {
+  el("text", { x, y, "font-size": 11, fill: "#b35a00", "font-style": "italic" }, text);
+}
+</script>
+</body>
+</html>

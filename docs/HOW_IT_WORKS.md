@@ -1,6 +1,8 @@
 # How ChessGuru works
 
-A guide for anyone reading or changing the code. For installing and using the app, see the
+A guide for anyone reading or changing the code. For a diagram of how data flows between tables, see
+[data_lineage.pdf](data_lineage.pdf); for every table and column, see [data_dictionary.pdf](data_dictionary.pdf).
+For installing and using the app, see the
 [README](../README.md).
 
 ## The big picture
@@ -53,6 +55,7 @@ Each step writes a row to the `pipeline_runs` table, saying whether it worked an
 | `src/chessguru/frozen.py` | Extra start-up logic for the packaged Windows app |
 | `dbt/` | The dbt project that builds gold from silver |
 | `tests/` | pytest tests (fake API, fake engine, sample games) |
+| `docs/` | This guide, the data lineage and data dictionary PDFs, and their HTML sources (`docs/pdf-source/`) |
 | `packaging/` | PyInstaller recipe and Inno Setup installer script for the Windows app |
 | `.github/workflows/` | CI (`ci.yml`) and the Windows app build (`windows-app.yml`) |
 
@@ -287,5 +290,7 @@ Pushing a tag such as `v0.1.0` also publishes them as a GitHub release.
   opens read-only connections. A "database is busy" message means another step is writing.
 - **Silver changes:** bump `SCHEMA_VERSION` in `db.py` whenever a silver table changes shape.
 - **New silver columns:** reach gold only if you add them to the staging and fact models in `dbt/`.
+- **Data docs:** when a table or column changes, update `docs/pdf-source/*.html` and rebuild the
+  PDFs with `node docs/pdf-source/build.js` (needs Node.js and Playwright).
 - **Pipeline steps:** `pipeline.py` is the single place they live. Keep the CLI and dashboard thin.
 - **Code style:** ruff and mypy (strict) must pass. CI enforces it.

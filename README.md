@@ -6,7 +6,8 @@ ChessGuru downloads your games from chess.com and checks every move with Stockfi
 engine). It then ranks your biggest weaknesses by how many games' worth of points each one
 costs you, with example positions from your own games. Everything runs on your own computer.
 
-**New to the code?** Read [How ChessGuru works](docs/HOW_IT_WORKS.md).
+**New to the code?** Read [How ChessGuru works](docs/HOW_IT_WORKS.md). For the data itself, see the
+[data lineage diagram](docs/data_lineage.pdf) and the [data dictionary](docs/data_dictionary.pdf).
 
 ## Windows: download and run
 
@@ -144,7 +145,8 @@ git push origin v0.1.0
 - dbt builds the dashboard's tables and tests them on every run
 - a log of every pipeline run
 
-See [How ChessGuru works](docs/HOW_IT_WORKS.md) for the details.
+See [How ChessGuru works](docs/HOW_IT_WORKS.md), the [data lineage diagram](docs/data_lineage.pdf)
+and the [data dictionary](docs/data_dictionary.pdf) for the details.
 
 ## Licence notes
 
