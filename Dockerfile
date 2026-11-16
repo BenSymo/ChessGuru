@@ -16,7 +16,7 @@ ENV PATH="/opt/venv/bin:${PATH}"
 COPY pyproject.toml uv.lock ./
 RUN uv sync --frozen --no-dev --no-install-project
 
-COPY README.md ./
+COPY README.md LICENSE ./
 COPY src ./src
 COPY dbt ./dbt
 RUN uv sync --frozen --no-dev

@@ -14,6 +14,7 @@ datas = [
     (str(ROOT / "dbt" / "models"), "dbt/models"),
     (str(ROOT / "dbt" / "macros"), "dbt/macros"),
     (str(ROOT / "dbt" / "tests"), "dbt/tests"),
+    (str(ROOT / "LICENSE"), "."),  # ChessGuru's own licence (GPL-3.0)
 ]
 stockfish = ROOT / "packaging" / "stockfish"
 if stockfish.exists():
