@@ -6,6 +6,9 @@ ChessGuru downloads your games from chess.com and checks every move with Stockfi
 engine). It then ranks your biggest weaknesses by how many games' worth of points each one
 costs you, with example positions from your own games. Everything runs on your own computer.
 
+ChessGuru is not affiliated with or endorsed by Chess.com. It uses Chess.com's public
+[Published-Data API](https://www.chess.com/news/view/published-data-api).
+
 **New to the code?** Read [How ChessGuru works](docs/HOW_IT_WORKS.md). For the data itself, see the
 [data lineage diagram](docs/data_lineage.pdf) and the [data dictionary](docs/data_dictionary.pdf).
 
@@ -148,7 +151,14 @@ git push origin v0.1.0
 See [How ChessGuru works](docs/HOW_IT_WORKS.md), the [data lineage diagram](docs/data_lineage.pdf)
 and the [data dictionary](docs/data_dictionary.pdf) for the details.
 
-## Licence notes
+## Licence
 
-Stockfish is free software under the GPL v3. The Windows app ships its licence in
-`_internal\stockfish`, and its source is at https://github.com/official-stockfish/Stockfish.
+ChessGuru is free software, released under the [GNU General Public License v3.0 or later](LICENSE).
+You may use, change and share it, as long as anything you share is under the same licence with
+its source code available. GPL-3.0 is needed because ChessGuru uses
+[python-chess](https://github.com/niklasf/python-chess), which is GPL-3.0.
+
+The Windows app also includes [Stockfish](https://github.com/official-stockfish/Stockfish), which
+is GPL-3.0 too. Its licence is in the app's `_internal\stockfish` folder.
+
+ChessGuru is not affiliated with or endorsed by Chess.com. "Chess.com" is a trademark of its owner.
